@@ -144,16 +144,24 @@ ol.defs li{margin:2px 0}
 .box{border:1px solid var(--line);border-radius:18px;background:var(--card);padding:10px 12px;display:flex;flex-direction:column;gap:2px;text-align:left;font-size:.88rem;cursor:pointer;width:100%;min-width:0}
 .boxes.details .box{min-height:132px}
 .boxes.simple .box{min-height:84px;padding:8px;align-items:center;justify-content:center;text-align:center}
-.boxes.simple .box .script{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-weight:700;font-size:1.15rem;word-break:break-word}
+.boxes.simple .box .dword{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-weight:700;font-size:1.15rem;word-break:break-word}
 .box.lock{border:1.5px solid var(--teal);cursor:default}
 .box.act{border:1.5px dashed var(--teal);cursor:default}
 .box .bh{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;color:var(--muted);width:100%}
-.boxes.simple .box .bh{justify-content:center;gap:4px}
+.boxes.simple .box .bh{justify-content:space-between;gap:4px}
 .box .script{font-size:1.5rem}
 .typein{border:1.5px dashed var(--teal);border-radius:var(--r-pill);padding:10px 12px;background:var(--card);margin:8px 0}
 .typein .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:6px}
 .typein input,.typein select{width:100%;border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:8px 10px;min-height:44px}
 .unlock{border:0;background:transparent;cursor:pointer;color:var(--teal);font-size:.8rem;padding:4px;display:inline-flex;align-items:center;gap:3px}
+.boxrm{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;cursor:pointer;font-size:.78rem;padding:2px 8px;min-height:28px;display:inline-flex;align-items:center;gap:4px}
+.boxrm:hover{border-color:var(--danger);color:var(--danger)}
+.lockic{display:inline-flex;color:var(--teal)} .lockic svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.2}
+.dword{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-weight:700;font-size:1.2rem;line-height:1.3;display:block;word-break:break-word}
+.boxes.details .dword{font-size:1.35rem}
+.boxes.simple .dword{word-break:normal;overflow-wrap:anywhere}
+.boxes.simple.n3 .dword{font-size:1.1rem} .boxes.simple.n4 .dword{font-size:clamp(.9rem,3.9vw,1.15rem)}
+.orig{font-family:"Noto Serif","SBL Hebrew","Ezra SIL","Gentium Plus","Times New Roman",serif;font-size:1.05rem;unicode-bidi:isolate}
 .unlock svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2}
 /* bottom nav */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom)}
@@ -204,7 +212,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -389,6 +397,39 @@ function extractTranslations(nodes){
 }
 const VARIETY = {tmr:'Jewish Babylonian Aramaic', jpa:'Jewish Palestinian Aramaic', syc:'Classical Syriac'};
 
+/* ---------- Display form for list words: capitalised, transliterated if not in Latin script ---------- */
+const NON_LATIN = /[^\u0000-ɏḀ-ỿ̀-ͯ‘-‟\s]/;
+const isNonLatin = w => NON_LATIN.test(w || '');
+const cap = t => { t = (t || '').trim(); const i = t.search(/\p{L}/u); return i < 0 ? t : t.slice(0,i) + t.charAt(i).toLocaleUpperCase() + t.slice(i+1); };
+const plainLatin = t => (t || '').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[ʔʕʼʻʾʿʹ]/g,'').normalize('NFC');
+const GREEK = {α:'a',β:'b',γ:'g',δ:'d',ε:'e',ζ:'z',η:'e',θ:'th',ι:'i',κ:'k',λ:'l',μ:'m',ν:'n',ξ:'x',ο:'o',π:'p',ρ:'r',σ:'s',ς:'s',τ:'t',υ:'y',φ:'ph',χ:'kh',ψ:'ps',ω:'o'};
+const CYR = {а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'yo',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'shch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
+// Simple letter-by-letter transliteration for Greek and Cyrillic only (machine-generated)
+function autoTranslit(word){
+  const w = (word || '').normalize('NFD').toLowerCase();
+  if (/[Ͱ-Ͽἀ-῿]/.test(w)){
+    let out = ''; const ch = [...w];
+    for (let i=0;i<ch.length;i++){
+      const c = ch[i];
+      if (/[̀-ͯ]/.test(c)){ if (c === '̔' && out.length <= 2 && !/^h/.test(out)) out = (out === 'r' ? 'rh' : 'h' + out); continue; }
+      if (c === 'γ' && /[γκξχ]/.test(ch[i+1] || '')){ out += 'n'; continue; }
+      if (c === 'υ' && /[αεηο]/.test(ch[i-1] || '')){ out += 'u'; continue; }
+      out += GREEK[c] !== undefined ? GREEK[c] : c;
+    }
+    return out;
+  }
+  if (/[Ѐ-ӿ]/.test(w)) return [...w.normalize('NFC')].map(c => CYR[c] !== undefined ? CYR[c] : c).join('');
+  return '';
+}
+function displayWord(it){
+  if (!isNonLatin(it.word)) return {text: cap(it.word), translit:false};
+  const tr = (it.tr || it.autoTr || '').split(/\s*[,;\/]\s*/)[0];
+  if (tr) return {text: cap(plainLatin(tr)), translit:true, auto: !it.tr};
+  return {text: it.word, translit:false, missing:true};
+}
+const dwHTML = (it, cls='dword') => { const d = displayWord(it); return `<span class="${cls}"${d.missing ? langAttr(it.lang) : ''}>${esc(d.text)}</span>`; };
+const dwText = it => displayWord(it).text;
+
 // Strip niqqud / harakat / macrons so we hit Wiktionary page titles
 function titleForm(word, code){
   let w = word.trim().replace(/\s+/g,' ');
@@ -467,7 +508,7 @@ async function enrichTerm(code, t){
         if (el.matches && el.matches('ul') && out.ipa && (code!=='hbo' || out.tiberian)) break;
       }
     }
-  }catch(e){ return out; }
+  }catch(e){ out.err = true; return out; }
   tc[key] = out;
   const ks = Object.keys(tc); if (ks.length > 600) delete tc[ks[0]];
   store.set('terms', tc);
@@ -836,10 +877,11 @@ function renderLists(){
   $('#imBtn').onclick = () => $('#importFile').click();
 }
 function itemHTML(it, opts={}){
-  const say = [it.tr && esc(it.tr), it.respell && `<b>${esc(it.respell)}</b>`].filter(Boolean).join(' · ');
+  const d = displayWord(it);
+  const say = [isNonLatin(it.word) && !d.missing ? `<span class="orig"${langAttr(it.lang)}>${esc(it.word)}</span>` : '', it.tr && esc(it.tr), it.respell && `<b>${esc(it.respell)}</b>`, d.auto ? `${esc(it.autoTr)} <span class="tag auto">auto</span>` : ''].filter(Boolean).join(' · ');
   return `<div class="item"><div class="main">
-    <span class="script"${langAttr(it.lang)}>${esc(it.word)}</span>
-    <div class="small">${say ? say + ' · ' : ''}${esc(it.langName || langName(it.lang))}${it.source==='typed' ? ' <span class="tag plain">typed</span>' : ''}</div>
+    ${dwHTML(it)}${d.missing ? ' <span class="small muted">(no transliteration found)</span>' : ''}
+    <div class="small">${say ? say + ' · ' : ''}${esc(L[it.lang] ? langName(it.lang) : (it.langName || it.lang))}${it.source==='typed' ? ' <span class="tag plain">typed</span>' : ''}</div>
     ${it.ipa ? `<div class="small muted">IPA: ${esc(it.ipa)}</div>` : ''}
     <div class="small muted">${it.meaning ? esc(it.meaning) + ' · ' : ''}saved ${esc(fmtDate(it.saved))}${it.url ? ` · <a href="${esc(it.url)}" target="_blank" rel="noopener">source</a>` : ''}</div>
   </div>${opts.remove ? `<button class="rm" data-rm="${it.id}" aria-label="Remove ${esc(it.word)}">Remove</button>` : ''}</div>`;
@@ -855,8 +897,31 @@ function renderList(id){
   else v.innerHTML = head + `<div class="pill static">${l.items.length ? [...l.items].reverse().map(it => itemHTML(it, {remove:true})).join('') : '<p class="empty">Nothing saved yet. Search for a word and tap ☆ Save.</p>'}</div>`;
   $('#rnBtn').onclick = () => promptSheet('Rename list', l.name, 'Rename', n => { l.name = n; saveLists(); render(); });
   $('#dlBtn').onclick = () => confirmSheet('Delete list?', `“${l.name}” and its ${l.items.length} item(s) will be removed from this device.`, 'Delete', () => { lists = lists.filter(x => x !== l); saveLists(); location.hash = 'lists'; });
-  v.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { const it = l.items.find(i=>i.id===b.dataset.rm); removeItem(l, b.dataset.rm); saveLists(); render(); toast(`Removed “${it ? it.word : ''}”`); });
+  v.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { const it = l.items.find(i=>i.id===b.dataset.rm); removeItem(l, b.dataset.rm); saveLists(); render(); toast(`Removed “${it ? dwText(it) : ''}”`); });
   if (l.type === 'compare') wireCompare(l);
+  fillTranslits(l);
+}
+// For non-Latin words saved without a transliteration: look it up on the word's Wiktionary entry,
+// otherwise fall back to a simple machine transliteration (Greek / Cyrillic only)
+let translitBusy = false;
+async function fillTranslits(l){
+  if (translitBusy) return;
+  const todo = l.items.filter(it => isNonLatin(it.word) && !it.tr && !it.trTried);
+  if (!todo.length) return;
+  translitBusy = true;
+  let changed = false;
+  for (const it of todo){
+    if (navigator.onLine !== false && L[it.lang]){
+      let e; try{ e = await enrichTerm(it.lang, {page: titleForm(it.word, it.lang)}); }catch(err){ e = {err:true}; }
+      if (e.err){ if (!it.autoTr){ const a = autoTranslit(it.word); if (a){ it.autoTr = a; changed = true; } } continue; }   // network problem: try the dictionary again next time
+      try{ if (e.tr){ it.tr = e.tr; it.respell = it.respell || respell(e.tr, it.lang); } if (!it.ipa && e.ipa) it.ipa = it.lang==='hbo' ? (e.tiberian||'') : e.ipa; }
+      catch(err){ continue; }
+    }
+    if (!it.tr){ const a = autoTranslit(it.word); if (a) it.autoTr = a; }
+    it.trTried = true; changed = true;
+  }
+  translitBusy = false;
+  if (changed){ saveLists(); const r = route(); if (r.name === 'list' && r.id === l.id) render(); }
 }
 
 /* ---------- Compare list (boxes) ---------- */
@@ -876,16 +941,18 @@ function compareHTML(l){
   const words = [];
   for (let k=0;k<b.n;k++){
     const it = b.slots[k] && item(b.slots[k]);
-    words.push(it ? `<bdi${langAttr(it.lang)}>${esc(it.word)}</bdi>` : `<bdi class="gap">___</bdi>`);
-    const unlock = `<button class="unlock" data-unlock="${k}" aria-label="Unlock word ${k+1}">${ICON.lock}${view==='details' ? ' unlock' : ''}</button>`;
+    words.push(it ? `<bdi${displayWord(it).missing ? langAttr(it.lang) : ''}>${esc(dwText(it))}</bdi>` : `<bdi class="gap">___</bdi>`);
+    const rmBtn = it ? `<button class="boxrm" data-boxrm="${k}" aria-label="Remove ${esc(dwText(it))} from box ${k+1}">✕${view==='details' ? ' remove' : ''}</button>` : '';
+    const lockIc = `<span class="lockic" title="Locked">${ICON.lock}</span>`;
     if (it && view === 'simple'){
-      boxes.push(`<div class="box lock" aria-label="Word ${k+1}: ${esc(it.word)}"><div class="bh">${k+1} ${unlock}</div><span class="script"${langAttr(it.lang)}>${esc(it.word)}</span></div>`);
+      boxes.push(`<div class="box lock" aria-label="Word ${k+1}: ${esc(dwText(it))}"><div class="bh"><span>${k+1} ${lockIc}</span> ${rmBtn}</div>${dwHTML(it)}</div>`);
     } else if (it){
       const say = [it.tr, it.respell].filter(Boolean);
-      boxes.push(`<div class="box lock" aria-label="Word ${k+1}: ${esc(it.word)}"><div class="bh">Word ${k+1} ${unlock}</div>
-        <span class="script"${langAttr(it.lang)}>${esc(it.word)}</span>
+      boxes.push(`<div class="box lock" aria-label="Word ${k+1}: ${esc(dwText(it))}"><div class="bh"><span>Word ${k+1} ${lockIc}</span> ${rmBtn}</div>
+        ${dwHTML(it)}
+        ${isNonLatin(it.word) && !displayWord(it).missing ? `<span class="orig"${langAttr(it.lang)}>${esc(it.word)}</span>` : ''}
         ${say.length ? `<div>${esc(say[0])}${say[1] ? ' · <b>'+esc(say[1])+'</b>' : ''}</div>` : ''}
-        <div class="muted small">${esc(it.langName || langName(it.lang))}${it.meaning ? ' · ' + esc(it.meaning) : ''}${it.source==='typed' ? ' · typed' : ''}</div></div>`);
+        <div class="muted small">${esc(L[it.lang] ? langName(it.lang) : (it.langName || it.lang))}${it.meaning ? ' · ' + esc(it.meaning) : ''}${it.source==='typed' ? ' · typed' : ''}</div></div>`);
     } else if (k === b.active){
       boxes.push(`<div class="box act"><div class="bh">${view==='details'?'Word ':''}${k+1} <span style="color:var(--teal)">active</span></div><div class="muted small">${view==='details'?'Tap a word below, or type one':'next'}</div></div>`);
     } else {
@@ -906,10 +973,10 @@ function compareHTML(l){
     ${typeIn}
     <div class="btns"><button class="btn" id="clrBtn" ${filled?'':'disabled'}>Clear boxes</button><button class="btn primary" id="cmbBtn" ${filled>=2?'':'disabled'}>Save combination</button></div>
     <p class="lbl">Words in this list — tap to lock into the next box</p>
-    ${l.items.length ? `<div class="chips">${l.items.map(it => `<button class="chip" data-pick="${it.id}" ${used.has(it.id)?'disabled':''}${langAttr(it.lang)}>${esc(it.word)}</button>`).join('')}</div>`
+    ${l.items.length ? `<div class="chips">${l.items.map(it => `<button class="chip" data-pick="${it.id}" ${used.has(it.id)?'disabled':''}${displayWord(it).missing ? langAttr(it.lang) : ''}>${esc(dwText(it))}</button>`).join('')}</div>`
       : '<p class="empty">No words yet — save words from Search into this list, or type one above.</p>'}
     <details class="pill"><summary><span>Saved combinations</span><span class="meta">${l.combos.length} ${ICON.chev}</span></summary><div class="body">
-      ${l.combos.length ? l.combos.map(cb => `<div class="item"><div class="main"><b>${esc(cb.name)}</b><div class="small muted">${cb.slots.slice(0,cb.n).map(id => { const it = item(id); return it ? esc(it.word) : '—'; }).join(' · ')} · ${esc(fmtDate(cb.saved))}</div></div>
+      ${l.combos.length ? l.combos.map(cb => `<div class="item"><div class="main"><b>${esc(cb.name)}</b><div class="small muted">${cb.slots.slice(0,cb.n).map(id => { const it = item(id); return it ? esc(dwText(it)) : '—'; }).join(' · ')} · ${esc(fmtDate(cb.saved))}</div></div>
         <button class="rm" data-open="${cb.id}">Open</button><button class="rm" data-delc="${cb.id}" aria-label="Delete combination ${esc(cb.name)}">Delete</button></div>`).join('') : '<p class="muted small">Lock 2 or more words into boxes, then tap Save combination.</p>'}
     </div></details>
     <details class="pill"><summary><span>Manage words</span><span class="meta">${l.items.length} ${ICON.chev}</span></summary><div class="body">
@@ -927,7 +994,7 @@ function wireCompare(l){
   };
   v.querySelectorAll('[data-n]').forEach(x => x.onclick = () => { b.n = +x.dataset.n; b.active = null; saveLists(); render(); });
   v.querySelectorAll('[data-view]').forEach(x => x.onclick = () => { b.view = x.dataset.view; saveLists(); render(); });
-  v.querySelectorAll('[data-unlock]').forEach(x => x.onclick = () => { const k = +x.dataset.unlock; b.slots[k] = null; b.active = k; saveLists(); render(); });
+  v.querySelectorAll('[data-boxrm]').forEach(x => x.onclick = () => { const k = +x.dataset.boxrm; const it = l.items.find(i=>i.id===b.slots[k]); b.slots[k] = null; b.active = k; saveLists(); render(); toast(`Removed “${it ? dwText(it) : ''}” from box ${k+1}`); });
   v.querySelectorAll('[data-activate]').forEach(x => x.onclick = () => { b.active = +x.dataset.activate; saveLists(); render(); setTimeout(()=>$('#typeW') && $('#typeW').focus(), 0); });
   v.querySelectorAll('[data-pick]').forEach(x => x.onclick = () => fill(x.dataset.pick));
   const go = $('#typeGo');
@@ -944,7 +1011,7 @@ function wireCompare(l){
   }
   $('#clrBtn').onclick = () => { b.slots = [null,null,null,null]; b.active = 0; saveLists(); render(); };
   $('#cmbBtn').onclick = () => {
-    const words = b.slots.slice(0,b.n).map(id => (l.items.find(i=>i.id===id)||{}).word).filter(Boolean);
+    const words = b.slots.slice(0,b.n).map(id => l.items.find(i=>i.id===id)).filter(Boolean).map(dwText);
     promptSheet('Name this combination', words.join(' / '), 'Save', name => { l.combos.push({id:uid(), name, n:b.n, slots:b.slots.slice(), saved:new Date().toISOString()}); saveLists(); render(); toast('Combination saved'); });
   };
   v.querySelectorAll('[data-open]').forEach(x => x.onclick = () => { const cb = l.combos.find(c=>c.id===x.dataset.open); b.n = cb.n; b.slots = cb.slots.map(id => l.items.some(i=>i.id===id) ? id : null); while (b.slots.length<4) b.slots.push(null); b.active = null; saveLists(); render(); window.scrollTo(0,0); });
@@ -987,7 +1054,7 @@ $('#importFile').addEventListener('change', async e => {
 function normList(x){
   if (!x || typeof x !== 'object' || !Array.isArray(x.items)) return null;
   const l = {id: String(x.id || uid()), name: String(x.name || 'Imported list'), type: x.type === 'compare' ? 'compare' : 'simple', created: x.created || new Date().toISOString(),
-    items: x.items.filter(i => i && i.word).map(i => ({id:String(i.id||uid()), word:String(i.word), lang:String(i.lang||'en'), langName:String(i.langName||langName(i.lang)), tr:String(i.tr||''), respell:String(i.respell||''), ipa:String(i.ipa||''), meaning:String(i.meaning||''), en:i.en?String(i.en):undefined, source:i.source==='typed'?'typed':'wiktionary', url: /^https:\/\//.test(i.url||'') ? i.url : '', saved:i.saved||new Date().toISOString()})),
+    items: x.items.filter(i => i && i.word).map(i => ({id:String(i.id||uid()), word:String(i.word), lang:String(i.lang||'en'), langName:String(i.langName||langName(i.lang)), tr:String(i.tr||''), respell:String(i.respell||''), ipa:String(i.ipa||''), meaning:String(i.meaning||''), en:i.en?String(i.en):undefined, autoTr:i.autoTr?String(i.autoTr):undefined, trTried:!!i.trTried, source:i.source==='typed'?'typed':'wiktionary', url: /^https:\/\//.test(i.url||'') ? i.url : '', saved:i.saved||new Date().toISOString()})),
     combos: Array.isArray(x.combos) ? x.combos.filter(c => c && Array.isArray(c.slots)).map(c => ({id:String(c.id||uid()), name:String(c.name||'Combination'), n:[2,3,4].includes(c.n)?c.n:2, slots:c.slots.slice(0,4).map(s=>s?String(s):null), saved:c.saved||new Date().toISOString()})) : []};
   if (l.type === 'compare') l.boxes = x.boxes && Array.isArray(x.boxes.slots) ? {n:[2,3,4].includes(x.boxes.n)?x.boxes.n:2, slots:x.boxes.slots.slice(0,4), active:null, view:x.boxes.view==='details'?'details':'simple'} : {n:2, slots:[null,null,null,null], active:0};
   return l;

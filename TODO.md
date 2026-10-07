@@ -15,7 +15,14 @@
 - [x] Looked-up words cached on the device for fast reopening
 - [x] Manifest + icons for Add to Home Screen; service worker registered (no caching yet)
 
+## Done (v1.1.0, 7 Oct 2026)
+- [x] Words in lists are capitalised; words not in Latin script (Hebrew, Greek, Arabic, Japanese, Chinese, Russian…) show their English transliteration first, with the original script underneath
+- [x] Words saved without a transliteration (e.g. typed Hebrew) look one up from their Wiktionary entry; Greek/Cyrillic fall back to an auto transliteration marked "auto"
+- [x] Each compare box has its own ✕ remove button (removes the word from that box only; the word stays in the list)
+- [x] 4-box Simple view no longer breaks words mid-word
+
 ## Next
+- [ ] Typed words with no transliteration found (e.g. unpointed Hebrew not on Wiktionary): let me add one by hand
 - [ ] Publish repo + turn on GitHub Pages, then live-test on Android, iPhone and PC
 - [ ] Offline mode (optional): cache the app shell in sw.js so the app opens with no signal
 - [ ] Sync lists via the GitHub repo (instead of manual Export / Import)
