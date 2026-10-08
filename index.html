@@ -17,24 +17,39 @@
 :root{
   --bg:#f6f7f8; --card:#ffffff; --ink:#1d2327; --muted:#56626a; --line:#d3d9dd;
   --teal:#0b7f7b; --teal-ink:#ffffff; --tealbg:#e2f2f1; --amber-bg:#fdf0dc; --amber:#8a5200;
+  --wd:#5b3fb0; --wdbg:#eee9fb; --page:var(--bg);
   --danger:#b3261e; --shadow:0 6px 24px rgba(0,0,0,.14);
   --r-pill:18px; --r-btn:14px;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
+  :root:not([data-theme]){
     --bg:#1e2124; --card:#2a2e32; --ink:#e8eaec; --muted:#a6aeb5; --line:#464c52;
     --teal:#3cbcb4; --teal-ink:#0f1f1f; --tealbg:#21393a; --amber-bg:#3d3220; --amber:#f0c27a;
+    --wd:#c3b3ff; --wdbg:#322b45; --page:var(--bg);
     --danger:#ff8a80; --shadow:0 6px 24px rgba(0,0,0,.5); color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --bg:#1e2124; --card:#2a2e32; --ink:#e8eaec; --muted:#a6aeb5; --line:#464c52;
   --teal:#3cbcb4; --teal-ink:#0f1f1f; --tealbg:#21393a; --amber-bg:#3d3220; --amber:#f0c27a;
+  --wd:#c3b3ff; --wdbg:#322b45; --page:var(--bg);
   --danger:#ff8a80; --shadow:0 6px 24px rgba(0,0,0,.5); color-scheme:dark;
 }
+/* Bubblegum: bright and playful, still high-contrast text */
+:root[data-theme="bubblegum"]{
+  --bg:#fff0f7; --card:#ffffff; --ink:#3a1631; --muted:#7b4a6c; --line:#f2bfda;
+  --teal:#c2185b; --teal-ink:#ffffff; --tealbg:#ffe0ef; --amber-bg:#fff3c4; --amber:#7a5200;
+  --wd:#6a3fc2; --wdbg:#efe6ff; --page:linear-gradient(165deg,#ffeef7 0%,#fdf2ff 45%,#eef6ff 100%);
+  --danger:#b3261e; --shadow:0 8px 26px rgba(194,24,91,.18); --r-pill:22px; --r-btn:18px;
+  color-scheme:light;
+}
+:root[data-theme="bubblegum"] .brand b{background:linear-gradient(90deg,#e91e63,#8e44ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+:root[data-theme="bubblegum"] .gobtn,:root[data-theme="bubblegum"] .btn.primary{background:linear-gradient(135deg,#d81b60,#8e24aa);border-color:transparent}
+:root[data-theme="bubblegum"] details.pill[open]{box-shadow:0 4px 16px rgba(194,24,91,.10)}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{background:var(--page);background-attachment:fixed;min-height:100vh}
 body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.45;
   padding-bottom:calc(72px + env(safe-area-inset-bottom));-webkit-text-size-adjust:100%}
 a{color:var(--teal)}
@@ -104,6 +119,9 @@ ol.defs li{margin:2px 0}
 .tag.auto{background:var(--amber-bg);color:var(--amber)}
 .tag.plain{background:transparent;border:1px solid var(--line);color:var(--muted)}
 .tag.cmp{background:transparent;border:1px solid var(--teal);color:var(--teal)}
+.tag.wd{background:var(--wdbg);color:var(--wd)}
+.tag.dm{background:var(--wdbg);color:var(--wd)}
+.alt-defs{list-style:disc}
 
 .cards{display:block}
 @media (min-width:760px){ .cards{display:grid;grid-template-columns:1fr 1fr;gap:0 12px} }
@@ -134,9 +152,9 @@ ol.defs li{margin:2px 0}
 /* compare boxes */
 .sentence{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-weight:700;font-size:1.5rem;line-height:1.35;
   margin:12px 0 4px;padding:12px 14px;border-radius:var(--r-pill);background:var(--card);border:1px solid var(--line);direction:ltr;text-align:left;word-break:break-word}
-.sentence bdi{margin-right:.35em}
 .sentence .gap{color:var(--muted);font-weight:400}
 .seg.two{grid-template-columns:1fr 1fr}
+.seg.four{grid-template-columns:repeat(auto-fit,minmax(80px,1fr))}
 .boxes{display:grid;gap:8px;margin:10px 0;direction:ltr}
 .boxes.simple.n2{grid-template-columns:repeat(2,1fr)} .boxes.simple.n3{grid-template-columns:repeat(3,1fr)} .boxes.simple.n4{grid-template-columns:repeat(4,1fr)}
 .boxes.details{grid-template-columns:1fr 1fr}
@@ -212,7 +230,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.3.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -238,7 +256,7 @@ const LANGS = [
 ];
 const L = Object.fromEntries(LANGS.map(l => [l.code, l]));
 const langName = c => (L[c] ? L[c].name : c);
-const MAX_COMPARE = 4;
+const MAX_COMPARE = 8;
 
 /* ---------- Storage (guarded) ---------- */
 const store = {
@@ -247,6 +265,8 @@ const store = {
 };
 let settings = Object.assign({theme:'auto', defaultLang:'en', compare:['he','grc','es']}, store.get('settings', {}));
 let lists = store.get('lists', []);
+// v1.2: combination names use single spaces instead of " / "
+lists.forEach(l => (l.combos || []).forEach(c => { if (/\s\/\s/.test(c.name)) c.name = c.name.replace(/\s+\/\s+/g, ' '); }));
 let recent = store.get('recent', []);
 const saveSettings = () => store.set('settings', settings);
 const saveLists = () => store.set('lists', lists);
@@ -266,19 +286,20 @@ const ICON = {
 };
 
 /* ---------- Theme ---------- */
+const THEMES = ['auto','light','dark','bubblegum'];
 function applyTheme(){
   const t = settings.theme;
   if (t === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
   const dark = t==='dark' || (t==='auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-  $('#themeColor').setAttribute('content', dark ? '#1e2124' : '#f6f7f8');
+  $('#themeColor').setAttribute('content', t==='bubblegum' ? '#ffe0ef' : dark ? '#1e2124' : '#f6f7f8');
   $('#themeBtn').setAttribute('aria-label', `Theme: ${t[0].toUpperCase()+t.slice(1)}. Tap to change`);
   $('#themeBtn').title = 'Theme: ' + t;
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 $('#themeBtn').addEventListener('click', () => {
-  const order = ['auto','light','dark'];
-  settings.theme = order[(order.indexOf(settings.theme)+1) % 3];
+  const order = THEMES;
+  settings.theme = order[(order.indexOf(settings.theme)+1) % order.length];
   saveSettings(); applyTheme(); toast('Theme: ' + settings.theme);
   if (route().name === 'settings') render();
 });
@@ -305,9 +326,12 @@ function headingInfo(el){
   return { level: +h.tagName[1], text: h.textContent.replace(/\[edit\]/,'').trim(), id: h.id || (h.querySelector('[id]')||{}).id || '' };
 }
 // Return the sibling elements belonging to a language's level-2 section
+// Wiktionary sends phones "mobile" HTML where parts of the page are wrapped in <section> elements;
+// flatten those so desktop and mobile HTML are read the same way
+const flatKids = el => [...el.children].flatMap(c => c.tagName === 'SECTION' ? flatKids(c) : [c]);
 function langSection(doc, secName){
   const root = doc.querySelector('.mw-parser-output') || doc.body;
-  const kids = [...root.children];
+  const kids = flatKids(root);
   let start = -1;
   for (let i=0;i<kids.length;i++){ const h = headingInfo(kids[i]); if (h && h.level===2 && h.text===secName){ start=i; break; } }
   if (start < 0) return null;
@@ -439,55 +463,121 @@ function titleForm(word, code){
   return w;
 }
 
+const CACHE_KEY = 'cache2', TERMS_KEY = 'terms2';   // v1.2: old caches dropped (they held broken phone results)
+const withTimeout = (p, ms=9000) => Promise.race([p, new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+const WD_LANG = {cmn:'zh', hbo:'he'};
+
+// Second source 1: Datamuse (English definitions from WordNet / Wiktionary)
+async function datamuseDefs(word){
+  const r = await withTimeout(fetch('https://api.datamuse.com/words?md=d&max=3&sp=' + encodeURIComponent(word)), 8000);
+  const j = await r.json();
+  const hit = j.find(x => x.word.toLowerCase() === word.toLowerCase() && x.defs);
+  if (!hit) return [];
+  const POSN = {n:'noun', v:'verb', adj:'adjective', adv:'adverb', u:''};
+  return hit.defs.slice(0,4).map(d => { const [p, ...rest] = d.split('\t'); return {pos: POSN[p] ?? p, def: rest.join(' ').trim()}; }).filter(d => d.def);
+}
+// Second source 2: Wikidata (names, people, places and concepts, with labels in many languages)
+async function wikidataLookup(word, code){
+  const wl = WD_LANG[code] || code;
+  const r = await withTimeout(fetch(`https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&origin=*&type=item&limit=10&uselang=en&language=${encodeURIComponent(wl)}&search=${encodeURIComponent(word)}`), 8000);
+  const j = await r.json();
+  const hits = (j.search || []).filter(h => !/disambiguation|Wikimedia/i.test(h.description || ''));
+  if (!hits.length) return null;
+  const exact = hits.filter(h => (h.label || '').toLowerCase() === word.toLowerCase() || (h.match && (h.match.text||'').toLowerCase() === word.toLowerCase()));
+  const pool = exact.length ? exact : hits;
+  const isCap = /^\p{Lu}/u.test(word);
+  const isName = h => /given name|family name|surname/i.test(h.description || '');
+  const pick = isCap ? (pool.find(h => /given name/i.test(h.description||'')) || pool.find(isName) || pool[0])
+                     : (pool.find(h => !isName(h)) || pool[0]);
+  const wanted = [...new Set(LANGS.map(l => WD_LANG[l.code] || l.code).concat(['grc','zh-hans']))].join('|');
+  const e = await withTimeout(fetch(`https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&origin=*&props=labels|descriptions&languages=${wanted}&ids=${pick.id}`), 8000);
+  const ent = (await e.json()).entities[pick.id];
+  const labels = {};
+  for (const l of LANGS){ const k = WD_LANG[l.code] || l.code; const v = (ent.labels[k] || (l.code==='cmn' && ent.labels['zh-hans']) || {}).value; if (v) labels[l.code] = v; }
+  return {id: pick.id, label: pick.label, description: (ent.descriptions.en || {}).value || pick.description || '', labels, url: 'https://www.wikidata.org/wiki/' + pick.id};
+}
+
 async function lookup(word, code){
   const key = code + '|' + word.trim().toLowerCase();
-  const cache = store.get('cache', {});
+  const cache = store.get(CACHE_KEY, {});
   if (cache[key]) return Object.assign({cached:true}, cache[key]);
   const lang = L[code];
   const base = titleForm(word, code);
-  const tries = [...new Set([base.toLowerCase(), base, base[0].toUpperCase()+base.slice(1)])];
-  let page = null, sec = null;
+  const capd = base[0].toUpperCase() + base.slice(1);
+  const typedCap = /^\p{Lu}/u.test(base);
+  const tries = [...new Set(typedCap ? [base, base.toLowerCase(), capd] : [base.toLowerCase(), base, capd])];
+  // start the second sources in parallel; they never block or break the main lookup
+  const dmP = code === 'en' ? datamuseDefs(base).catch(() => []) : Promise.resolve([]);
+  const wdP = wikidataLookup(base, code).catch(() => null);
+  let page = null, sec = null, anyPage = null;
   for (const t of tries){
-    page = await fetchPage(t);
-    if (page){ sec = langSection(page.doc, lang.sec); if (sec) break; }
+    const pg = await fetchPage(t);
+    if (pg){ anyPage = anyPage || pg; const sc = langSection(pg.doc, lang.sec); if (sc){ page = pg; sec = sc; break; } }
   }
-  if (!page) return { word, lang:code, notFound:'page' };
-  if (!sec) return { word, lang:code, notFound:'lang', title: page.title };
-  const res = { word, lang:code, title: page.title, url: WIKT(page.title) + '#' + lang.sec.replace(/ /g,'_'),
-    meanings: extractMeanings(sec), etymology: extractEtymology(sec), translations:{}, pivot:null, fetched:new Date().toISOString() };
-  if (code === 'en'){
-    let nodes = sec;
-    const subLink = sec.flatMap(n => [...n.querySelectorAll('a')]).find(a => (a.title||'') === page.title + '/translations');
-    res.translations = extractTranslations(nodes);
-    if (subLink){
-      const sub = await fetchPage(page.title + '/translations');
-      if (sub){ const t2 = extractTranslations([...(sub.doc.querySelector('.mw-parser-output')||sub.doc.body).children]);
-        for (const k in t2){ res.translations[k] = t2[k].concat(res.translations[k]||[]); } }
-    }
-  } else {
-    // Non-English search: use the first English gloss as a pivot for the translation tables
-    const pivot = firstDefLinkTitle(sec);
-    if (pivot){
-      const en = await fetchPage(pivot);
-      const enSec = en && langSection(en.doc, 'English');
-      if (enSec){
-        res.pivot = en.title;
-        res.translations = extractTranslations(enSec);
-        res.translations.en = [{term: en.title, page: en.title, tr:'', gender:'', gloss:'', qual:'', variety:''}];
+  const res = { word, lang:code, title: base, url: '', meanings:[], etymology:[], translations:{}, pivot:null, name:null, alt:[], wd:null, fetched:new Date().toISOString() };
+  if (sec){
+    res.title = page.title; res.url = WIKT(page.title) + '#' + lang.sec.replace(/ /g,'_');
+    res.meanings = extractMeanings(sec); res.etymology = extractEtymology(sec);
+    if (code === 'en'){
+      const subLink = sec.flatMap(n => [...n.querySelectorAll('a')]).find(a => (a.title||'') === page.title + '/translations');
+      res.translations = extractTranslations(sec);
+      if (subLink){
+        const sub = await fetchPage(page.title + '/translations');
+        if (sub){ const t2 = extractTranslations(flatKids(sub.doc.querySelector('.mw-parser-output')||sub.doc.body));
+          for (const k in t2){ res.translations[k] = t2[k].concat(res.translations[k]||[]); } }
+      }
+    } else {
+      // Non-English search: use the first English gloss as a pivot for the translation tables
+      const pivot = firstDefLinkTitle(sec);
+      if (pivot){
+        const en = await fetchPage(pivot);
+        const enSec = en && langSection(en.doc, 'English');
+        if (enSec){
+          res.pivot = en.title;
+          res.translations = extractTranslations(enSec);
+          res.translations.en = [{term: en.title, page: en.title, tr:'', gender:'', gloss:'', qual:'', variety:''}];
+        }
       }
     }
+    // Names: if we used the lower-case word, also check the capitalised page for a name ("Proper noun")
+    if (page.title !== capd && /^[\p{L}'’-]+$/u.test(base)){
+      try{
+        const np = await fetchPage(capd);
+        const ns = np && langSection(np.doc, lang.sec);
+        if (ns){
+          const nm = extractMeanings(ns).filter(m => /Proper noun/i.test(m.pos));
+          if (nm.length) res.name = {title: np.title, meanings: nm, etymology: extractEtymology(ns), url: WIKT(np.title) + '#' + lang.sec.replace(/ /g,'_')};
+        }
+      }catch(e){}
+    }
   }
+  // drop Datamuse definitions that repeat Wiktionary's wording (Datamuse partly draws on Wiktionary)
+  const norm = t => t.toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().slice(0,60);
+  const seenDefs = new Set(res.meanings.concat(res.name ? res.name.meanings : []).flatMap(m => m.defs).map(norm));
+  res.alt = (await dmP).filter(a => !seenDefs.has(norm(a.def)));
+  res.wd = await wdP;
+  // Wikidata fills languages Wiktionary has no translation for
+  if (res.wd){
+    for (const [c, label] of Object.entries(res.wd.labels)){
+      if (c === code) continue;
+      if (!(res.translations[c] || []).length) res.translations[c] = [{term: label, page: label, tr:'', gender:'', gloss:'', qual:'', variety:'', src:'wikidata'}];
+    }
+  }
+  if (!sec && !res.alt.length && !res.wd){
+    return anyPage ? { word, lang:code, notFound:'lang', title: anyPage.title } : { word, lang:code, notFound:'page' };
+  }
+  if (!sec) res.noWiktionary = true;
   cache[key] = res;
   const keys = Object.keys(cache);
   if (keys.length > CACHE_MAX) keys.sort((a,b)=>(cache[a].fetched||'').localeCompare(cache[b].fetched||'')).slice(0, keys.length-CACHE_MAX).forEach(k=>delete cache[k]);
-  store.set('cache', cache);
+  store.set(CACHE_KEY, cache);
   return res;
 }
 
 // Look up a translated term's own entry for a transliteration / IPA (and the Tiberian reading for Biblical Hebrew)
 async function enrichTerm(code, t){
   const key = code + '|' + t.page;
-  const tc = store.get('terms', {});
+  const tc = store.get(TERMS_KEY, {});
   if (tc[key]) return tc[key];
   const out = {tr:'', ipa:'', tiberian:''};
   try{
@@ -511,7 +601,7 @@ async function enrichTerm(code, t){
   }catch(e){ out.err = true; return out; }
   tc[key] = out;
   const ks = Object.keys(tc); if (ks.length > 600) delete tc[ks[0]];
-  store.set('terms', tc);
+  store.set(TERMS_KEY, tc);
   return out;
 }
 
@@ -630,7 +720,7 @@ function newListSheet(onCreated, preset){
     <input class="field" id="nl" placeholder="List name, e.g. Bible words" aria-label="List name">
     <div class="btns" role="radiogroup" aria-label="List type">
       <button class="btn choice" data-t="simple" role="radio"><b>Simple</b><small>words saved in a list</small></button>
-      <button class="btn choice" data-t="compare" role="radio"><b>Compare</b><small>words side by side in 2–4 boxes</small></button>
+      <button class="btn choice" data-t="compare" role="radio"><b>Bridging</b><small>words side by side in 2–4 boxes</small></button>
     </div>
     <div class="btns"><button class="btn" data-x>Cancel</button><button class="btn primary" data-ok>Create list</button></div>`, sh => {
     const paint = () => sh.querySelectorAll('[data-t]').forEach(b => { b.classList.toggle('on', b.dataset.t===type); b.setAttribute('aria-checked', b.dataset.t===type); });
@@ -649,7 +739,7 @@ function saveSheet(item, onDone){
     sh.innerHTML = `<h2 id="sheetTitle">Save “<span${langAttr(item.lang)}>${esc(item.word)}</span>” to…</h2>
       <p class="small muted" style="margin:0 0 6px">${esc(langName(item.lang))}${item.tr ? ' · ' + esc(item.tr) : ''}</p>
       ${lists.length ? '' : '<p class="empty">No lists yet — create one below.</p>'}
-      ${lists.map(l => `<label class="check"><span>${esc(l.name)} <span class="tag ${l.type==='compare'?'cmp':'plain'}">${l.type==='compare'?'Compare':'Simple'}</span></span>
+      ${lists.map(l => `<label class="check"><span>${esc(l.name)} <span class="tag ${l.type==='compare'?'cmp':'plain'}">${l.type==='compare'?'Bridging':'Simple'}</span></span>
         <input type="checkbox" data-id="${l.id}" ${inLists.has(l.id)?'checked':''}></label>`).join('')}
       <button class="btn" data-new style="width:100%;margin-top:8px">+ New list…</button>
       <div class="btns"><button class="btn" data-x>Cancel</button><button class="btn primary" data-ok>Save</button></div>`;
@@ -725,7 +815,7 @@ function renderHome(){
   const r = $('#results'); if (!r) return;
   r.innerHTML = `
     ${recent.length ? `<p class="lbl">Recent searches</p><div class="chips">${recent.map(x => `<button class="chip" type="button" data-w="${esc(x.word)}" data-l="${x.lang}"${langAttr(x.lang)}>${esc(x.word)}</button>`).join('')}</div>` : `<p class="empty">Type a word and press Enter to see its meaning, history and how it's said in the languages you compare.</p>`}
-    <p class="credit">Definitions, word history &amp; translations from <a href="https://en.wiktionary.org/" target="_blank" rel="noopener">Wiktionary</a> (CC BY-SA 4.0). v${APP_VERSION}</p>`;
+    <p class="credit">Definitions, word history &amp; translations from <a href="https://en.wiktionary.org/" target="_blank" rel="noopener">Wiktionary</a> (CC BY-SA 4.0), with <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) and <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> as second sources. v${APP_VERSION}</p>`;
   r.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { if (b.dataset.l !== settings.defaultLang){ settings.defaultLang = b.dataset.l; saveSettings(); } doSearch(b.dataset.w); });
 }
 async function doSearch(word){
@@ -774,32 +864,44 @@ function renderResults(res){
     return;
   }
   const code = res.lang;
-  const posList = [...new Set(res.meanings.map(m => m.pos.toLowerCase()))].join(', ');
-  const first = res.meanings[0] && res.meanings[0].defs[0] || '';
-  const meaningItem = {word: res.title, lang: code, langName: langName(code), tr:'', respell:'', ipa:'', meaning: first, source:'wiktionary', url: res.url};
+  const alt = res.alt || [];
+  const posList = [...new Set(res.meanings.map(m => m.pos.toLowerCase()).concat(res.name ? ['name'] : []).concat(!res.meanings.length ? alt.map(a=>a.pos).filter(Boolean) : []))].join(', ')
+    || (res.wd && res.wd.description) || '';
+  const first = (res.meanings[0] && res.meanings[0].defs[0]) || (res.name && res.name.meanings[0].defs[0]) || (alt[0] && alt[0].def) || (res.wd && res.wd.description) || '';
+  const meaningItem = {word: res.title, lang: code, langName: langName(code), tr:'', respell:'', ipa:'', meaning: first, source: res.noWiktionary ? (alt.length ? 'datamuse' : 'wikidata') : 'wiktionary', url: res.url || (res.wd && res.wd.url) || ''};
+  const wdLine = res.wd ? `<p class="small" style="margin:8px 0 0"><span class="tag wd">Wikidata</span> <a href="${esc(res.wd.url)}" target="_blank" rel="noopener">${esc(res.wd.label)}</a>${res.wd.description ? ' — ' + esc(res.wd.description) : ''}</p>` : '';
+  const altBlock = alt.length ? `<div class="alt"><div class="small muted" style="margin:6px 0 2px">${res.meanings.length ? 'Second source' : 'Definitions'} <span class="tag dm">Datamuse (WordNet)</span></div>
+      <ul class="defs alt-defs">${alt.map(a => `<li>${a.pos ? `<i>${esc(a.pos)}</i> — ` : ''}${esc(a.def)}</li>`).join('')}</ul></div>` : '';
   const cmp = settings.compare.filter(c => c !== code && L[c]);
   r.innerHTML = `
     <h2 class="word-h"${langAttr(code)}>${esc(res.title)} <small>${esc(posList)}</small></h2>
     ${res.cached ? '<p class="small muted" style="margin:2px 0 0">Saved on this device</p>' : ''}
     <details class="pill" open><summary><span>Meaning</span><span class="meta">${ICON.chev}</span></summary><div class="body">
       <div style="display:flex;justify-content:flex-end"><button class="savebtn" data-save="meaning">☆ Save</button></div>
-      ${res.meanings.length ? res.meanings.map(m => `<div class="pos">${esc(m.pos)}</div><ol class="defs">${m.defs.map(d=>`<li>${esc(d)}</li>`).join('')}</ol>`).join('') : '<p class="muted">No definitions found in this entry.</p>'}
-      <p class="small muted" style="margin:4px 0 0"><span class="tag">Wiktionary</span> <a href="${esc(res.url)}" target="_blank" rel="noopener">Full entry ↗</a></p>
+      ${res.meanings.length ? res.meanings.map(m => `<div class="pos">${esc(m.pos)}</div><ol class="defs">${m.defs.map(d=>`<li>${esc(d)}</li>`).join('')}</ol>`).join('')
+        + `<p class="small muted" style="margin:4px 0 0"><span class="tag">Wiktionary</span> <a href="${esc(res.url)}" target="_blank" rel="noopener">Full entry ↗</a></p>`
+        : (res.noWiktionary ? '<p class="muted small">No Wiktionary entry for this word.</p>' : '<p class="muted">No definitions found in the Wiktionary entry.</p>')}
+      ${altBlock}${wdLine}
     </div></details>
+    ${res.name ? `<details class="pill"${/^\p{Lu}/u.test(res.word) ? ' open' : ''}><summary><span>As a name — ${esc(res.name.title)}</span><span class="meta">${ICON.chev}</span></summary><div class="body">
+      ${res.name.meanings.map(m => `<ol class="defs">${m.defs.map(d=>`<li>${esc(d)}</li>`).join('')}</ol>`).join('')}
+      ${res.name.etymology.length ? `<div class="pos small">Name origin</div>${res.name.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('')}` : ''}
+      <p class="small muted" style="margin:0"><span class="tag">Wiktionary</span> <a href="${esc(res.name.url)}" target="_blank" rel="noopener">Name entry ↗</a></p>
+    </div></details>` : ''}
     <details class="pill"><summary><span>Word history</span><span class="meta">${ICON.chev}</span></summary><div class="body">
-      ${res.etymology.length ? res.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('') : '<p class="muted">No etymology recorded for this word on Wiktionary.</p>'}
-      <p class="small muted" style="margin:0"><span class="tag">Wiktionary</span></p>
+      ${res.etymology.length ? res.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('') + '<p class="small muted" style="margin:0"><span class="tag">Wiktionary</span></p>'
+        : '<p class="muted">No etymology recorded for this word on Wiktionary.</p>'}
     </div></details>
     ${res.pivot ? `<div class="info">Translations are matched through the English word <b>${esc(res.pivot)}</b> (the first English gloss), so they may be approximate.</div>` : ''}
     ${!cmp.length ? '<p class="empty">Add compare languages above to see this word in other languages.</p>' : ''}
     <div class="cards">${cmp.map(c => langCard(res, c)).join('')}</div>
-    <p class="credit">Source: <a href="${esc(res.url)}" target="_blank" rel="noopener">Wiktionary “${esc(res.title)}”</a>, CC BY-SA 4.0. Respellings marked <span class="tag auto">auto</span> are machine-generated from the dictionary transliteration.</p>`;
+    <p class="credit">Sources: ${res.url ? `<a href="${esc(res.url)}" target="_blank" rel="noopener">Wiktionary “${esc(res.title)}”</a> (CC BY-SA 4.0)` : 'Wiktionary (no entry)'}${alt.length ? ' · <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> (WordNet)' : ''}${res.wd ? ` · <a href="${esc(res.wd.url)}" target="_blank" rel="noopener">Wikidata</a> (CC0)` : ''}. Respellings marked <span class="tag auto">auto</span> are machine-generated from the transliteration.</p>`;
   r.querySelector('[data-save="meaning"]').onclick = () => saveSheet(meaningItem, () => renderResults(res));
   r.querySelectorAll('[data-save-c]').forEach(b => b.onclick = () => {
     const t = cardTerms(res, b.dataset.saveC)[+b.dataset.i];
     const c = b.dataset.saveC;
     const item = {word: t.term, lang: c, langName: langName(c), tr: t.tr || '', respell: respell(t.tr, c), ipa: (c==='hbo' ? t.tiberian : t.ipa) || '',
-      meaning: (t.gloss ? t.gloss + ' — ' : '') + res.title, en: res.title, source:'wiktionary', url: WIKT(t.page)};
+      meaning: (t.gloss ? t.gloss + ' — ' : '') + res.title, en: res.title, source: t.src || 'wiktionary', url: t.src==='wikidata' && res.wd ? res.wd.url : WIKT(t.page)};
     saveSheet(item, () => renderResults(res));
   });
   // Fill in missing transliteration / IPA from each language's own entry
@@ -829,16 +931,18 @@ function termHTML(res, c, t, i){
       <div class="gloss">${[t.gloss && 'sense: ' + t.gloss, t.gender, t.qual, t.variety && (VARIETY[t.variety]||t.variety)].filter(Boolean).map(esc).join(' · ')}</div>
     </div><button class="savebtn" data-save-c="${c}" data-i="${i}" aria-label="Save ${esc(t.term)}">☆ Save</button></div>`;
 }
-function langCard(res, c){
+function langCard(res, c, open){
   const terms = cardTerms(res, c);
   const name = langName(c);
   const head = terms[0] ? `<span class="sumtxt">${esc(name)} — <span${langAttr(c)}>${esc(terms[0].term)}</span></span>` : `<span class="sumtxt">${esc(name)}</span>`;
   let body;
-  if (!terms.length) body = `<p class="muted">Wiktionary lists no ${esc(name)} translation for “${esc(res.title)}”. Nothing has been guessed.</p>`;
+  if (!terms.length) body = `<p class="muted">Neither Wiktionary nor Wikidata lists a ${esc(name)} form of “${esc(res.title)}”. Nothing has been guessed.</p>`;
   else body = (c==='hbo' && terms[0].viaHe ? `<div class="info small">Wiktionary doesn’t list Biblical Hebrew separately. Showing the Hebrew word(s), with the Biblical Hebrew pronunciation where the word’s entry gives one.</div>` : '')
     + terms.map((t,i) => termHTML(res, c, t, i)).join('')
-    + `<p class="small muted" style="margin:6px 0 0"><span class="tag">Wiktionary</span> translation table</p>`;
-  return `<details class="pill" open data-card="${c}"><summary>${head}<span class="meta">${terms.length>1?terms.length:''} ${ICON.chev}</span></summary><div class="body">${body}</div></details>`;
+    + (terms[0].src === 'wikidata' ? `<p class="small muted" style="margin:6px 0 0"><span class="tag wd">Wikidata</span> label — Wiktionary has no translation for this</p>`
+       : `<p class="small muted" style="margin:6px 0 0"><span class="tag">Wiktionary</span> translation table</p>`);
+  if (open === undefined){ const cmp = settings.compare.filter(x => x !== res.lang && L[x]); open = cmp.indexOf(c) < 4; }
+  return `<details class="pill"${open ? ' open' : ''} data-card="${c}"><summary>${head}<span class="meta">${terms.length>1?terms.length:''} ${ICON.chev}</span></summary><div class="body">${body}</div></details>`;
 }
 async function enrichCard(res, c){
   const terms = cardTerms(res, c); if (!terms.length) return;
@@ -854,12 +958,12 @@ async function enrichCard(res, c){
   const card = document.querySelector(`[data-card="${c}"]`);
   if (!card) return;
   const open = card.open;
-  card.outerHTML = langCard(res, c);
+  card.outerHTML = langCard(res, c, open);
   const nc = document.querySelector(`[data-card="${c}"]`); nc.open = open;
   nc.querySelectorAll('[data-save-c]').forEach(b => b.onclick = () => {
     const t = cardTerms(res, c)[+b.dataset.i];
     const tr = t.tr || t._tr || '';
-    saveSheet({word:t.term, lang:c, langName:langName(c), tr, respell:respell(tr,c), ipa:(c==='hbo'?t._tiberian:t._ipa)||'', meaning:(t.gloss?t.gloss+' — ':'')+res.title, en:res.title, source:'wiktionary', url:WIKT(t.page)});
+    saveSheet({word:t.term, lang:c, langName:langName(c), tr, respell:respell(tr,c), ipa:(c==='hbo'?t._tiberian:t._ipa)||'', meaning:(t.gloss?t.gloss+' — ':'')+res.title, en:res.title, source:t.src||'wiktionary', url: t.src==='wikidata' && res.wd ? res.wd.url : WIKT(t.page)});
   });
 }
 
@@ -869,7 +973,7 @@ function renderLists(){
   v.innerHTML = `<h2 class="page">My lists</h2>
     <div class="btns"><button class="btn primary" id="nlBtn">+ New list</button><button class="btn" id="exBtn">Export</button><button class="btn" id="imBtn">Import</button></div>
     ${lists.length ? lists.map(l => `<a class="pill" href="#list/${l.id}"><div class="row"><span class="sumtxt">${esc(l.name)}</span>
-      <span class="meta muted small" style="font-weight:400;display:flex;gap:6px;align-items:center;flex:none"><span class="tag ${l.type==='compare'?'cmp':'plain'}">${l.type==='compare'?'Compare':'Simple'}</span> ${l.items.length} ›</span></div></a>`).join('')
+      <span class="meta muted small" style="font-weight:400;display:flex;gap:6px;align-items:center;flex:none"><span class="tag ${l.type==='compare'?'cmp':'plain'}">${l.type==='compare'?'Bridging':'Simple'}</span> ${l.items.length} ›</span></div></a>`).join('')
       : '<p class="empty">No lists yet. Create one, or tap ☆ Save on any search result.</p>'}
     <p class="credit">Lists are stored on this device. Use Export / Import to move them between your phone and PC.</p>`;
   $('#nlBtn').onclick = () => newListSheet(l => { location.hash = 'list/' + l.id; });
@@ -890,7 +994,7 @@ function renderList(id){
   const l = getList(id); const v = $('#view');
   if (!l){ v.innerHTML = `<p class="empty">This list no longer exists.</p><div class="btns"><a class="btn" href="#lists">Back to lists</a></div>`; return; }
   const head = `<p style="margin:10px 0 0"><a href="#lists" class="small">‹ All lists</a></p>
-    <h2 class="page">${esc(l.name)} <span class="tag ${l.type==='compare'?'cmp':'plain'}">${l.type==='compare'?'Compare':'Simple'}</span></h2>
+    <h2 class="page">${esc(l.name)} <span class="tag ${l.type==='compare'?'cmp':'plain'}">${l.type==='compare'?'Bridging':'Simple'}</span></h2>
     <p class="small muted" style="margin:0">${l.items.length} item${l.items.length===1?'':'s'}</p>
     <div class="btns"><button class="btn" id="rnBtn">Rename</button><button class="btn danger" id="dlBtn">Delete list</button></div>`;
   if (l.type === 'compare') v.innerHTML = head + compareHTML(l);
@@ -976,7 +1080,7 @@ function compareHTML(l){
     ${l.items.length ? `<div class="chips">${l.items.map(it => `<button class="chip" data-pick="${it.id}" ${used.has(it.id)?'disabled':''}${displayWord(it).missing ? langAttr(it.lang) : ''}>${esc(dwText(it))}</button>`).join('')}</div>`
       : '<p class="empty">No words yet — save words from Search into this list, or type one above.</p>'}
     <details class="pill"><summary><span>Saved combinations</span><span class="meta">${l.combos.length} ${ICON.chev}</span></summary><div class="body">
-      ${l.combos.length ? l.combos.map(cb => `<div class="item"><div class="main"><b>${esc(cb.name)}</b><div class="small muted">${cb.slots.slice(0,cb.n).map(id => { const it = item(id); return it ? esc(dwText(it)) : '—'; }).join(' · ')} · ${esc(fmtDate(cb.saved))}</div></div>
+      ${l.combos.length ? l.combos.map(cb => `<div class="item"><div class="main"><b>${esc(cb.name)}</b><div class="small muted">${cb.slots.slice(0,cb.n).map(id => { const it = item(id); return it ? esc(dwText(it)) : '—'; }).join(' ')} · ${esc(fmtDate(cb.saved))}</div></div>
         <button class="rm" data-open="${cb.id}">Open</button><button class="rm" data-delc="${cb.id}" aria-label="Delete combination ${esc(cb.name)}">Delete</button></div>`).join('') : '<p class="muted small">Lock 2 or more words into boxes, then tap Save combination.</p>'}
     </div></details>
     <details class="pill"><summary><span>Manage words</span><span class="meta">${l.items.length} ${ICON.chev}</span></summary><div class="body">
@@ -1012,7 +1116,7 @@ function wireCompare(l){
   $('#clrBtn').onclick = () => { b.slots = [null,null,null,null]; b.active = 0; saveLists(); render(); };
   $('#cmbBtn').onclick = () => {
     const words = b.slots.slice(0,b.n).map(id => l.items.find(i=>i.id===id)).filter(Boolean).map(dwText);
-    promptSheet('Name this combination', words.join(' / '), 'Save', name => { l.combos.push({id:uid(), name, n:b.n, slots:b.slots.slice(), saved:new Date().toISOString()}); saveLists(); render(); toast('Combination saved'); });
+    promptSheet('Name this combination', words.join(' '), 'Save', name => { l.combos.push({id:uid(), name, n:b.n, slots:b.slots.slice(), saved:new Date().toISOString()}); saveLists(); render(); toast('Combination saved'); });
   };
   v.querySelectorAll('[data-open]').forEach(x => x.onclick = () => { const cb = l.combos.find(c=>c.id===x.dataset.open); b.n = cb.n; b.slots = cb.slots.map(id => l.items.some(i=>i.id===id) ? id : null); while (b.slots.length<4) b.slots.push(null); b.active = null; saveLists(); render(); window.scrollTo(0,0); });
   v.querySelectorAll('[data-delc]').forEach(x => x.onclick = () => { const cb = l.combos.find(c=>c.id===x.dataset.delc); confirmSheet('Delete combination?', `“${cb.name}” will be removed. The words stay in the list.`, 'Delete', () => { l.combos = l.combos.filter(c => c !== cb); saveLists(); render(); }); });
@@ -1063,11 +1167,11 @@ function normList(x){
 /* ---------- Settings view ---------- */
 function renderSettings(){
   const v = $('#view');
-  const cacheN = Object.keys(store.get('cache', {})).length;
+  const cacheN = Object.keys(store.get(CACHE_KEY, {})).length;
   v.innerHTML = `<h2 class="page">Settings</h2>
     <div class="settings-sec">
       <h3>Appearance</h3>
-      <div class="seg" role="group" aria-label="Theme">${['auto','light','dark'].map(t=>`<button data-theme-set="${t}" aria-pressed="${settings.theme===t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>
+      <div class="seg four" role="group" aria-label="Theme">${THEMES.map(t=>`<button data-theme-set="${t}" aria-pressed="${settings.theme===t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>
       <h3>Languages</h3>
       <div class="btns"><button class="btn choice" id="sDef">Default language<small>${esc(langName(settings.defaultLang))}</small></button>
         <button class="btn choice" id="sCmp">Compare languages<small>${esc(settings.compare.map(langName).join(', ') || 'none')}</small></button></div>
@@ -1075,14 +1179,14 @@ function renderSettings(){
       <div class="btns"><button class="btn" id="sEx">Export lists</button><button class="btn" id="sIm">Import lists</button><button class="btn" id="sClr">Clear search history</button></div>
       <p class="small muted">${cacheN} looked-up word(s) are kept on this device so they reopen instantly. Lists and settings are stored only in this browser — export regularly as a backup.</p>
       <h3>About the data</h3>
-      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/" target="_blank" rel="noopener">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. Transliterations are from Wiktionary’s translation tables or the word’s own entry. The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing.</p>
+      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/" target="_blank" rel="noopener">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. Transliterations are from Wiktionary’s translation tables or the word’s own entry. The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>).</p>
       <p class="small muted">Biblical Hebrew isn’t listed separately on Wiktionary, so that card shows the Hebrew word with its Biblical Hebrew (Tiberian) pronunciation when the entry has one. Koine Greek is listed under Ancient Greek.</p>
       <p class="credit">Bridging Terms v${APP_VERSION}</p>
     </div>`;
   v.querySelectorAll('[data-theme-set]').forEach(b => b.onclick = () => { settings.theme = b.dataset.themeSet; saveSettings(); applyTheme(); render(); });
   $('#sDef').onclick = pickDefaultLang; $('#sCmp').onclick = pickCompareLangs;
   $('#sEx').onclick = exportData; $('#sIm').onclick = () => $('#importFile').click();
-  $('#sClr').onclick = () => confirmSheet('Clear search history?', 'Recent searches and saved look-ups are removed from this device. Your lists are not affected.', 'Clear', () => { recent = []; store.set('recent', []); store.set('cache', {}); store.set('terms', {}); current = null; render(); toast('Search history cleared'); });
+  $('#sClr').onclick = () => confirmSheet('Clear search history?', 'Recent searches and saved look-ups are removed from this device. Your lists are not affected.', 'Clear', () => { recent = []; store.set('recent', []); store.set(CACHE_KEY, {}); store.set(TERMS_KEY, {}); current = null; render(); toast('Search history cleared'); });
 }
 
 /* ---------- Start ---------- */

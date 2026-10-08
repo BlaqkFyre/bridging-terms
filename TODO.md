@@ -21,9 +21,21 @@
 - [x] Each compare box has its own ✕ remove button (removes the word from that box only; the word stays in the list)
 - [x] 4-box Simple view no longer breaks words mid-word
 
+## Done (v1.2.0, 8 Oct 2026)
+- [x] Fixed: meanings and word history were blank on phones (Wiktionary sends phones a different page layout); old cached results are discarded
+- [x] Names work: capitalised words (Luke, Fred) look up the name entry first; lower-case words also show an "As a name" card when one exists
+- [x] Second sources: Wikidata (names, people, places, concepts; fills missing languages, marked "Wikidata") and Datamuse (extra English definitions from WordNet, duplicates of Wiktionary removed)
+- [x] Bubblegum theme (bright pink/purple, all text ≥ 4.5:1 contrast); theme switch now Auto / Light / Dark / Bubblegum
+- [x] Saved combination names use single spaces (old " / " names converted); sentence preview uses single spaces
+- [x] "Compare" lists renamed "Bridging" lists
+
+## Done (v1.3.0, 8 Oct 2026)
+- [x] Compare up to 8 languages at once (first 4 language cards open, the rest start collapsed with the word shown in the header)
+
 ## Next
 - [ ] Typed words with no transliteration found (e.g. unpointed Hebrew not on Wiktionary): let me add one by hand
-- [ ] Publish repo + turn on GitHub Pages, then live-test on Android, iPhone and PC
+- [x] Published at https://blaqkfyre.github.io/bridging-terms/
+- [ ] Live-test v1.2 on Android, iPhone and PC after pushing
 - [ ] Offline mode (optional): cache the app shell in sw.js so the app opens with no signal
 - [ ] Sync lists via the GitHub repo (instead of manual Export / Import)
 - [ ] Reorder words in a list / drag boxes
