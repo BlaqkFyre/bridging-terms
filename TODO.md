@@ -45,8 +45,13 @@
 ## Done (v1.6.0, 8 Oct 2026)
 - [x] Search results: for words in other scripts the large word is now the transliteration (e.g. klaíō), with the original script and easy-read respelling underneath (κλαίω · KLEYE-oh); card headings use the transliteration too
 
+## Done (v1.7.0, 8 Oct 2026)
+- [x] Right-to-left words (Hebrew, Arabic…) in Simple lists and Bridging boxes now sit at the left edge like other words (they still read right-to-left)
+- [x] Name meanings: names show a "Name meaning" card with the meaning/origin sentences from the name's English Wikipedia article (found through Wikidata), plus Wiktionary's name origin; saved names and searched Bridging words keep the meaning
+
 ## Next
 - [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
+- [ ] Later: biblical name meanings (e.g. Hitchcock's Bible Names / BDB via Bolls.life) for names Wikipedia doesn't explain
 - [ ] Later: Wikipedia cross-language links for names of people/places (e.g. Luke → Λουκάς, لوقا)
 - [ ] Later (optional): Sefaria Hebrew/Aramaic dictionary panel; Tatoeba example sentences; MyMemory machine translation (marked "machine")
 - [ ] Typed words with no transliteration found (e.g. unpointed Hebrew not on Wiktionary): let me add one by hand
