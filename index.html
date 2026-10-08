@@ -122,6 +122,15 @@ ol.defs li{margin:2px 0}
 .tag.wd{background:var(--wdbg);color:var(--wd)}
 .tag.dm{background:var(--wdbg);color:var(--wd)}
 .tag.wp{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.rootline{margin:8px 0 4px;padding:8px 10px;border-radius:12px;background:var(--tealbg);font-size:.92rem}
+.rootblock{border-left:3px solid var(--teal);padding-left:10px;margin:4px 0 6px}
+.srclink{text-decoration:none;color:var(--muted);margin-right:8px;white-space:nowrap}
+.srclink:hover{color:var(--teal)}
+/* link previews */
+.lp-pop{position:fixed;z-index:55;max-width:340px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px 12px;font-size:.86rem;line-height:1.4;pointer-events:none;display:none}
+.lp-pop.show{display:block}
+.lp-pop b{display:block;margin-bottom:2px}
+.lp-img{float:right;max-width:84px;max-height:84px;border-radius:10px;margin:0 0 6px 10px}
 .tag.xl{background:transparent;border:1px solid var(--line);color:var(--muted);font-weight:500}
 .alt-defs{list-style:disc}
 
@@ -238,7 +247,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -269,7 +278,7 @@ const LANGS_AZ = [...LANGS].sort((a, b) => a.name.localeCompare(b.name));
 
 /* ---------- Storage (guarded) ---------- */
 // Look-up caches can always be thrown away; lists and settings never are.
-const CACHE_KEYS = ['cache3','terms2','xlit'];
+const CACHE_KEYS = ['cache4','terms2','xlit'];
 const store = {
   get(k, def){ try{ const v = localStorage.getItem('bt.'+k); return v ? JSON.parse(v) : def; }catch(e){ return def; } },
   set(k, v){
@@ -287,7 +296,7 @@ const store = {
   }
 };
 // Remove caches from older versions (they could fill the browser's storage and block list saving)
-['cache','terms','cache2'].forEach(k => { try{ localStorage.removeItem('bt.'+k); }catch(e){} });
+['cache','terms','cache2','cache3'].forEach(k => { try{ localStorage.removeItem('bt.'+k); }catch(e){} });
 
 // Second copy of the lists in IndexedDB (more durable than localStorage, survives a full localStorage)
 const backup = {
@@ -514,7 +523,7 @@ function titleForm(word, code){
   return w;
 }
 
-const CACHE_KEY = 'cache3', TERMS_KEY = 'terms2';   // v1.7: cache3 adds name meanings   // v1.2: old caches dropped (they held broken phone results)
+const CACHE_KEY = 'cache4', TERMS_KEY = 'terms2';   // v1.7: cache3 adds name meanings   // v1.2: old caches dropped (they held broken phone results)
 const withTimeout = (p, ms=9000) => Promise.race([p, new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 const WD_LANG = {cmn:'zh', hbo:'he'};
 
@@ -548,10 +557,38 @@ async function wikidataLookup(word, code){
   return {id: pick.id, label: pick.label, description: (ent.descriptions.en || {}).value || pick.description || '', labels, url: 'https://www.wikidata.org/wiki/' + pick.id};
 }
 
-// Name meanings: find the Wikidata "given name"/"family name" item, follow it to its English Wikipedia
-// article and pick out the sentences that explain the meaning/origin of the name.
-async function nameMeaning(word){
-  if (!/^[\p{L}'’-]+$/u.test(word)) return null;
+// Name meanings, from three open sources:
+//  1) Wiktionary's name entry ("A diminutive of Tatiana", "Short for Frederick"...) to find the root name
+//  2) Wikidata to find the name's English Wikipedia article
+//  3) Wikipedia sentences that explain the meaning / origin
+// If the name comes from another name, the root name's meaning is looked up too (up to 2 steps: Tania → Tatiana → Tatius).
+const DERIV = /\b(diminutive|short(?:ened)? form|short|pet form|hypocoristic|nickname|variant(?: spelling)?|alternative (?:form|spelling)|feminine form|masculine form|form|anglicized form|anglicised form|transliteration|cognate|derivative)\b[^.;]*?\b(of|for|from)\b/i;
+async function wiktNameSense(name){
+  const pg = await fetchPage(name);
+  const sec = pg && langSection(pg.doc, 'English');
+  if (!sec) return null;
+  let inPN = false;
+  for (const el of sec){
+    const h = headingInfo(el);
+    if (h){ inPN = /^Proper noun/i.test(h.text); continue; }
+    if (inPN && el.tagName === 'OL'){
+      for (const li of el.children){
+        const c = li.cloneNode(true); c.querySelectorAll('ul,dl,ol,.HQToggle,style').forEach(n => n.remove());
+        const text = c.textContent.replace(/\s+/g,' ').trim();
+        if (!/name/i.test(text)) continue;
+        const m = text.match(DERIV);
+        let root = '';
+        if (m){
+          const after = text.slice(m.index);
+          root = [...c.querySelectorAll('a')].map(a => (a.title || '').replace(/#.*/,'')).find(t => /^[A-Z][a-zà-ÿ'’-]+$/.test(t) && t.toLowerCase() !== name.toLowerCase() && after.includes(t)) || '';
+        }
+        return {text, root, relation: m ? m[1].toLowerCase() : '', url: WIKT(pg.title) + '#English', etymology: extractEtymology(sec)};
+      }
+    }
+  }
+  return {text:'', root:'', relation:'', url: WIKT(pg.title) + '#English', etymology: extractEtymology(sec)};
+}
+async function wikipediaName(word){
   const s = await (await withTimeout(fetch(`https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&origin=*&type=item&limit=12&language=en&uselang=en&search=${encodeURIComponent(word)}`), 8000)).json();
   const hits = (s.search || []).filter(h => (h.label || '').toLowerCase() === word.toLowerCase());
   const item = hits.find(h => /given name/i.test(h.description || '')) || hits.find(h => /family name|surname/i.test(h.description || ''));
@@ -561,13 +598,42 @@ async function nameMeaning(word){
   const info = {kind: item.description || 'name', wdUrl: 'https://www.wikidata.org/wiki/' + item.id, title: title || '', url: title ? 'https://en.wikipedia.org/wiki/' + encodeURIComponent(title.replace(/ /g,'_')) : '', meaning: [], intro: ''};
   if (!title) return info;
   const j = await (await withTimeout(fetch('https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exchars=8000&format=json&formatversion=2&origin=*&redirects=1&titles=' + encodeURIComponent(title)), 9000)).json();
-  const txt = ((j.query.pages[0] || {}).extract || '').replace(/==+[^=]+==+/g, ' ').replace(/\(\s*\)/g, '').replace(/\(\s*[;,]\s*/g, '(').replace(/\s+/g, ' ');
-  const sents = txt.split(/(?<=[.!?])\s+(?=[A-Z\u0370-\u03FF])/).map(x => x.trim()).filter(x => x.length > 20 && x.length < 600 && (x.match(/:/g) || []).length < 6);
+  const raw = ((j.query.pages[0] || {}).extract || '');
+  if (/may (also )?refer to/i.test(raw.slice(0, 300))) { info.url = ''; info.title = ''; return info; }   // list page, not an article about the name
+  const txt = raw.replace(/==+[^=]+==+/g, ' ').replace(/\(\s*\)/g, '').replace(/\(\s*[;,]\s*/g, '(').replace(/\s+/g, ' ');
+  const sents = txt.split(/(?<=[.!?])\s+(?=[A-ZͰ-Ͽ])/).map(x => x.trim()).filter(x => x.length > 20 && x.length < 600 && (x.match(/:/g) || []).length < 6);
   info.intro = sents[0] || '';
   const strong = sents.filter(x => /\bmean(s|ing|t)?\b/i.test(x));
-  const weaker = sents.filter(x => !strong.includes(x) && /derived from|derives from|comes from|form of|origin(ally)?\b|diminutive|short for|translat/i.test(x) && x !== info.intro);
+  const weaker = sents.filter(x => !strong.includes(x) && /derived from|derives from|derivative of|comes from|form of|named after|origin(ally)?\b|diminutive|short for|translat/i.test(x));
   info.meaning = strong.concat(weaker).slice(0, 3);
+  const joined = info.meaning.concat([info.intro]).join(' ');
+  const rm = joined.match(/\b(?:diminutive|short form|pet form|variant|form|derivative)\s+of\s+(?:the\s+(?:[a-z]+\s+)*?name\s+)?([A-Z][a-zà-ÿ'’-]+)/)
+          || joined.match(/\b(?:diminutive|short form|pet form|variant|form|derivative)\s+of\s+[^.]{0,60}?\bname\s+([A-Z][a-zà-ÿ'’-]+)/);
+  if (rm && rm[1].toLowerCase() !== word.toLowerCase()) info.root = rm[1];
   return info;
+}
+async function nameMeaning(word, depth = 0, seen = new Set()){
+  if (!/^[\p{L}'’-]+$/u.test(word)) return null;
+  const name = word[0].toUpperCase() + word.slice(1);
+  seen.add(name.toLowerCase());
+  const [wk, wp] = await Promise.all([wiktNameSense(name).catch(() => null), wikipediaName(name).catch(() => null)]);
+  if (!wp && !(wk && wk.text)) return null;
+  const info = Object.assign({name, kind: '', wdUrl: '', title: '', url: '', meaning: [], intro: ''}, wp || {});
+  info.name = name;
+  if (wk && wk.text){ info.wikt = wk.text; info.wiktUrl = wk.url; info.wiktEty = (wk.etymology || [])[0] || ''; if (!info.kind) info.kind = /female/i.test(wk.text) ? 'female given name' : /male/i.test(wk.text) ? 'male given name' : 'name'; }
+  const root = (wk && wk.root) || (wp && wp.root) || '';
+  if (root && depth < 2 && !seen.has(root.toLowerCase())){
+    info.root = root; info.relation = (wk && wk.root === root && wk.relation) || 'form';
+    info.rootInfo = await nameMeaning(root, depth + 1, seen).catch(() => null);
+  }
+  return info;
+}
+// Best one-line meaning for a name, following the root name if needed
+function nameMeaningLine(ni){
+  if (!ni) return '';
+  if (ni.meaning && ni.meaning.length) return ni.meaning[0];
+  if (ni.root && ni.rootInfo){ const r = nameMeaningLine(ni.rootInfo); return `${cap(ni.relation || 'form')} of ${ni.root}${r ? ': ' + r : ''}`; }
+  return ni.wiktEty || '';
 }
 
 async function lookup(word, code){
@@ -582,7 +648,7 @@ async function lookup(word, code){
   // start the second sources in parallel; they never block or break the main lookup
   const dmP = code === 'en' ? datamuseDefs(base).catch(() => []) : Promise.resolve([]);
   const wdP = wikidataLookup(base, code).catch(() => null);
-  const nmP = code === 'en' || /^[A-Za-z]/.test(base) ? nameMeaning(capd).catch(() => null) : Promise.resolve(null);
+  const nmP = /^[\p{L}'’-]+$/u.test(base) && (code === 'en' || /^[A-Za-zÀ-ÿ]/.test(base)) ? withTimeout(nameMeaning(capd), 25000).catch(() => null) : Promise.resolve(null);
   let page = null, sec = null, anyPage = null;
   for (const t of tries){
     const pg = await fetchPage(t);
@@ -921,7 +987,7 @@ function renderHome(){
   const r = $('#results'); if (!r) return;
   r.innerHTML = `
     ${recent.length ? `<p class="lbl">Recent searches</p><div class="chips">${recent.map(x => `<button class="chip" type="button" data-w="${esc(x.word)}" data-l="${x.lang}"${langAttr(x.lang)}>${esc(x.word)}</button>`).join('')}</div>` : `<p class="empty">Type a word and press Enter to see its meaning, history and how it's said in the languages you compare.</p>`}
-    <p class="credit">Definitions, word history &amp; translations from <a href="https://en.wiktionary.org/" target="_blank" rel="noopener">Wiktionary</a> (CC BY-SA 4.0), with <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) and <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> as second sources. v${APP_VERSION}</p>`;
+    <p class="credit">Definitions, word history &amp; translations from <a href="https://en.wiktionary.org/">Wiktionary</a> (CC BY-SA 4.0), with <a href="https://www.wikidata.org/">Wikidata</a> (CC0) and <a href="https://www.datamuse.com/api/">Datamuse</a> as second sources. v${APP_VERSION}</p>`;
   r.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { if (b.dataset.l !== settings.defaultLang){ settings.defaultLang = b.dataset.l; saveSettings(); } doSearch(b.dataset.w); });
 }
 async function doSearch(word){
@@ -973,12 +1039,12 @@ function renderResults(res){
   const alt = res.alt || [];
   const posList = [...new Set(res.meanings.map(m => m.pos.toLowerCase()).concat(res.name ? ['name'] : []).concat(!res.meanings.length ? alt.map(a=>a.pos).filter(Boolean) : []))].join(', ')
     || (res.wd && res.wd.description) || '';
-  const nmSent = res.nameInfo && res.nameInfo.meaning[0] ? ' ' + res.nameInfo.meaning[0] : '';
+  const nmLine = nameMeaningLine(res.nameInfo); const nmSent = nmLine ? ' ' + nmLine : '';
   const m0 = res.meanings[0];
   const first = m0 ? m0.defs[0] + (/Proper noun/i.test(m0.pos) ? nmSent : '')
     : (res.name ? res.name.meanings[0].defs[0] + nmSent : ((alt[0] && alt[0].def) || (res.wd && res.wd.description) || nmSent.trim()));
   const meaningItem = {word: res.title, lang: code, langName: langName(code), tr:'', respell:'', ipa:'', meaning: first, source: res.noWiktionary ? (alt.length ? 'datamuse' : 'wikidata') : 'wiktionary', url: res.url || (res.wd && res.wd.url) || ''};
-  const wdLine = res.wd ? `<p class="small" style="margin:8px 0 0"><span class="tag wd">Wikidata</span> <a href="${esc(res.wd.url)}" target="_blank" rel="noopener">${esc(res.wd.label)}</a>${res.wd.description ? ' — ' + esc(res.wd.description) : ''}</p>` : '';
+  const wdLine = res.wd ? `<p class="small" style="margin:8px 0 0"><span class="tag wd">Wikidata</span> <a href="${esc(res.wd.url)}">${esc(res.wd.label)}</a>${res.wd.description ? ' — ' + esc(res.wd.description) : ''}</p>` : '';
   const altBlock = alt.length ? `<div class="alt"><div class="small muted" style="margin:6px 0 2px">${res.meanings.length ? 'Second source' : 'Definitions'} <span class="tag dm">Datamuse (WordNet)</span></div>
       <ul class="defs alt-defs">${alt.map(a => `<li>${a.pos ? `<i>${esc(a.pos)}</i> — ` : ''}${esc(a.def)}</li>`).join('')}</ul></div>` : '';
   const cmp = settings.compare.filter(c => c !== code && L[c]);
@@ -988,7 +1054,7 @@ function renderResults(res){
     <details class="pill" open><summary><span>Meaning</span><span class="meta">${ICON.chev}</span></summary><div class="body">
       <div style="display:flex;justify-content:flex-end"><button class="savebtn" data-save="meaning">☆ Save</button></div>
       ${res.meanings.length ? res.meanings.map(m => `<div class="pos">${esc(m.pos)}</div><ol class="defs">${m.defs.map(d=>`<li>${esc(d)}</li>`).join('')}</ol>`).join('')
-        + `<p class="small muted" style="margin:4px 0 0"><span class="tag">Wiktionary</span> <a href="${esc(res.url)}" target="_blank" rel="noopener">Full entry ↗</a></p>`
+        + `<p class="small muted" style="margin:4px 0 0"><span class="tag">Wiktionary</span> <a href="${esc(res.url)}">Full entry ↗</a></p>`
         : (res.noWiktionary ? '<p class="muted small">No Wiktionary entry for this word.</p>' : '<p class="muted">No definitions found in the Wiktionary entry.</p>')}
       ${altBlock}${wdLine}
     </div></details>
@@ -1000,7 +1066,7 @@ function renderResults(res){
     ${res.pivot ? `<div class="info">Translations are matched through the English word <b>${esc(res.pivot)}</b> (the first English gloss), so they may be approximate.</div>` : ''}
     ${!cmp.length ? '<p class="empty">Add compare languages above to see this word in other languages.</p>' : ''}
     <div class="cards">${cmp.map(c => langCard(res, c)).join('')}</div>
-    <p class="credit">Sources: ${res.url ? `<a href="${esc(res.url)}" target="_blank" rel="noopener">Wiktionary “${esc(res.title)}”</a> (CC BY-SA 4.0)` : 'Wiktionary (no entry)'}${alt.length ? ' · <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> (WordNet)' : ''}${res.wd ? ` · <a href="${esc(res.wd.url)}" target="_blank" rel="noopener">Wikidata</a> (CC0)` : ''}${res.nameInfo && res.nameInfo.url ? ` · <a href="${esc(res.nameInfo.url)}" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA 4.0)` : ''}. Respellings marked <span class="tag auto">auto</span> are machine-generated from the transliteration.</p>`;
+    <p class="credit">Sources: ${res.url ? `<a href="${esc(res.url)}">Wiktionary “${esc(res.title)}”</a> (CC BY-SA 4.0)` : 'Wiktionary (no entry)'}${alt.length ? ' · <a href="https://www.datamuse.com/api/">Datamuse</a> (WordNet)' : ''}${res.wd ? ` · <a href="${esc(res.wd.url)}">Wikidata</a> (CC0)` : ''}${res.nameInfo && res.nameInfo.url ? ` · <a href="${esc(res.nameInfo.url)}">Wikipedia</a> (CC BY-SA 4.0)` : ''}. Respellings marked <span class="tag auto">auto</span> are machine-generated from the transliteration.</p>`;
   r.querySelector('[data-save="meaning"]').onclick = () => saveSheet(meaningItem, () => renderResults(res));
   r.querySelectorAll('[data-save-c]').forEach(b => b.onclick = () => {
     const t = cardTerms(res, b.dataset.saveC)[+b.dataset.i];
@@ -1013,20 +1079,36 @@ function renderResults(res){
   // Fill in missing transliteration / IPA from each language's own entry
   cmp.forEach(c => enrichCard(res, c));
 }
+function nameBlockHTML(ni, level){
+  // level 0 = the searched name, 1+ = the name it comes from
+  const parts = [];
+  if (level > 0) parts.push(`<div class="pos" style="margin-top:6px">${esc(ni.name)}${ni.kind ? ` <span class="small muted" style="font-weight:400">${esc(ni.kind)}</span>` : ''}</div>`);
+  if (ni.meaning && ni.meaning.length) parts.push(`<ul class="defs alt-defs">${ni.meaning.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`);
+  else if (ni.intro && level > 0) parts.push(`<p style="margin:0 0 6px">${esc(ni.intro)}</p>`);
+  if (ni.wikt && (level > 0 || !ni.meaning.length)) parts.push(`<p class="small" style="margin:0 0 6px">${esc(ni.wikt)}</p>`);
+  if (ni.wiktEty && !(ni.meaning && ni.meaning.length)) parts.push(`<p class="small muted" style="margin:0 0 6px">Origin: ${esc(ni.wiktEty)}</p>`);
+  const src = [ni.url ? `<a href="${esc(ni.url)}" class="srclink"><span class="tag wp">Wikipedia</span> ${esc(ni.title)}</a>` : '',
+               ni.wiktUrl ? `<a href="${esc(ni.wiktUrl)}" class="srclink"><span class="tag">Wiktionary</span> ${esc(ni.name)}</a>` : ''].filter(Boolean).join(' ');
+  if (src) parts.push(`<p class="small muted" style="margin:0 0 6px">${src}</p>`);
+  if (ni.root){
+    parts.push(`<div class="rootline">${esc(ni.name)} is a <b>${esc(ni.relation || 'form')}</b> of <b>${esc(ni.root)}</b>${ni.rootInfo ? '' : ' (no further meaning found)'}</div>`);
+    if (ni.rootInfo) parts.push(`<div class="rootblock">${nameBlockHTML(ni.rootInfo, level + 1)}</div>`);
+  }
+  return parts.join('');
+}
 function nameCardHTML(res){
   const n = res.name, ni = res.nameInfo;
-  const title = (n && n.title) || res.title;
+  const title = (ni && ni.name) || (n && n.title) || res.title;
   const open = /^\p{Lu}/u.test(res.word) || (!res.meanings.length);
   const selfName = !n && res.meanings[0] && /Proper noun/i.test(res.meanings[0].pos);
+  const anyMeaning = ni && (ni.meaning.length || ni.rootInfo || ni.wiktEty);
   return `<details class="pill"${open ? ' open' : ''}><summary><span>Name meaning — ${esc(title)}</span><span class="meta">${ICON.chev}</span></summary><div class="body">
-    ${ni && ni.meaning.length ? `<ul class="defs alt-defs">${ni.meaning.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-    ${ni && !ni.meaning.length && ni.intro ? `<p style="margin:0 0 8px">${esc(ni.intro)}</p>` : ''}
-    ${ni ? `<p class="small muted" style="margin:0 0 8px">${ni.url ? `<span class="tag wp">Wikipedia</span> <a href="${esc(ni.url)}" target="_blank" rel="noopener">${esc(ni.title)} ↗</a>` : `<span class="tag wd">Wikidata</span> <a href="${esc(ni.wdUrl)}" target="_blank" rel="noopener">${esc(ni.kind)}</a>`}</p>` : ''}
+    ${ni ? nameBlockHTML(ni, 0) : ''}
     ${n ? `${n.meanings.map(m => `<ol class="defs">${m.defs.map(d=>`<li>${esc(d)}</li>`).join('')}</ol>`).join('')}
-      ${n.etymology.length ? `<div class="pos small">Name origin</div>${n.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('')}` : ''}
-      <p class="small muted" style="margin:0"><span class="tag">Wiktionary</span> <a href="${esc(n.url)}" target="_blank" rel="noopener">Name entry ↗</a></p>` : ''}
-    ${selfName && res.etymology.length ? `<div class="pos small">Name origin</div>${res.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('')}<p class="small muted" style="margin:0"><span class="tag">Wiktionary</span></p>` : ''}
-    ${ni && !ni.meaning.length && !(n && n.etymology.length) && !res.etymology.length ? '<p class="small muted" style="margin:0">No meaning recorded for this name in Wikipedia or Wiktionary.</p>' : ''}
+      ${n.etymology.length && !(ni && ni.wiktEty) ? `<div class="pos small">Name origin</div>${n.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('')}` : ''}
+      ${ni && ni.wiktUrl ? '' : `<p class="small muted" style="margin:0"><a href="${esc(n.url)}" class="srclink"><span class="tag">Wiktionary</span> Name entry</a></p>`}` : ''}
+    ${selfName && res.etymology.length && !(ni && ni.wiktEty) ? `<div class="pos small">Name origin</div>${res.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('')}` : ''}
+    ${!anyMeaning && !(n && n.etymology.length) && !res.etymology.length ? '<p class="small muted" style="margin:0">No meaning recorded for this name in Wikipedia or Wiktionary.</p>' : ''}
   </div></details>`;
 }
 function cardTerms(res, c){
@@ -1124,7 +1206,7 @@ function itemHTML(it, opts={}){
     ${dwHTML(it)}${d.missing ? ' <span class="small muted">(no transliteration found)</span>' : ''}
     <div class="small">${say ? say + ' · ' : ''}${esc(L[it.lang] ? langName(it.lang) : (it.langName || it.lang))}${it.source==='typed' ? ' <span class="tag plain">typed</span>' : ''}</div>
     ${it.ipa ? `<div class="small muted">IPA: ${esc(it.ipa)}</div>` : ''}
-    <div class="small muted">${it.meaning ? esc(it.meaning) + ' · ' : ''}saved ${esc(fmtDate(it.saved))}${it.url ? ` · <a href="${esc(it.url)}" target="_blank" rel="noopener">source</a>` : ''}</div>
+    <div class="small muted">${it.meaning ? esc(it.meaning) + ' · ' : ''}saved ${esc(fmtDate(it.saved))}${it.url ? ` · <a href="${esc(it.url)}">source</a>` : ''}</div>
   </div>${opts.remove ? `<button class="rm" data-rm="${it.id}" aria-label="Remove ${esc(it.word)}">Remove</button>` : ''}</div>`;
 }
 function renderList(id){
@@ -1244,7 +1326,8 @@ async function typedLookup(w, lang){
   const alt = res.alt || [];
   const m = res.meanings[0] || (res.name && res.name.meanings[0]);
   let meaning = (m && m.defs[0]) || (alt[0] && alt[0].def) || (res.wd && res.wd.description) || '';
-  if (res.nameInfo && res.nameInfo.meaning[0] && (!m || /Proper noun/i.test(m.pos))) meaning = (meaning ? meaning + ' ' : '') + res.nameInfo.meaning[0];
+  const nml = nameMeaningLine(res.nameInfo);
+  if (nml && (!m || /Proper noun/i.test(m.pos))) meaning = (meaning ? meaning + ' ' : '') + nml;
   const pos = m ? m.pos : (alt[0] && alt[0].pos) || '';
   let tr = '', trSrc = '', ipa = '';
   try{
@@ -1380,7 +1463,7 @@ function renderSettings(){
       <div class="info small" id="storeStatus">Checking storage…</div>
       <p class="small muted">Lists are saved on this device every time you change them (two copies), and stay after closing the app or restarting the phone. They are not online: export now and then as a backup, or to move lists between phone and PC. On iPhone, Safari and the home-screen app keep separate lists — use one of them.</p>
       <h3>About the data</h3>
-      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/" target="_blank" rel="noopener">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. Transliterations come from Wiktionary’s translation tables or the word’s own entry; when neither has one, Wiktionary’s transliteration rules are used (marked <span class="tag xl">Wiktionary rules</span>). The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>); name meanings come from the name’s English <a href="https://en.wikipedia.org/" target="_blank" rel="noopener">Wikipedia</a> article (CC BY-SA 4.0, marked <span class="tag wp">Wikipedia</span>).</p>
+      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. Transliterations come from Wiktionary’s translation tables or the word’s own entry; when neither has one, Wiktionary’s transliteration rules are used (marked <span class="tag xl">Wiktionary rules</span>). The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>); name meanings come from the name’s English <a href="https://en.wikipedia.org/">Wikipedia</a> article (CC BY-SA 4.0, marked <span class="tag wp">Wikipedia</span>).</p>
       <p class="small muted">Biblical Hebrew isn’t listed separately on Wiktionary, so that card shows the Hebrew word with its Biblical Hebrew (Tiberian) pronunciation when the entry has one. Koine Greek is listed under Ancient Greek.</p>
       <p class="credit">Bridging Terms v${APP_VERSION}</p>
     </div>`;
@@ -1399,6 +1482,77 @@ function renderSettings(){
   $('#sDef').onclick = pickDefaultLang; $('#sCmp').onclick = pickCompareLangs;
   $('#sEx').onclick = exportData; $('#sIm').onclick = () => $('#importFile').click();
   $('#sClr').onclick = () => confirmSheet('Clear search history?', 'Recent searches and saved look-ups are removed from this device. Your lists are not affected.', 'Clear', () => { recent = []; store.set('recent', []); store.set(CACHE_KEY, {}); store.set(TERMS_KEY, {}); current = null; render(); toast('Search history cleared'); });
+}
+
+/* ---------- Link previews: links open an in-app pop-up first; the pop-up offers "Open on site" ---------- */
+const lpCache = new Map();
+const LP_STATIC = {
+  'www.datamuse.com': {title:'Datamuse API', text:'A free word-finding service. Bridging Terms uses it for extra English definitions (from WordNet).'},
+  'creativecommons.org': {title:'Creative Commons licence', text:'The licence that lets apps reuse Wiktionary and Wikipedia text, as long as the source is credited and shared alike.'},
+};
+async function linkPreview(url){
+  if (lpCache.has(url)) return lpCache.get(url);
+  const u = new URL(url); let out = null;
+  try{
+    if (/wikipedia\.org$/.test(u.hostname) && u.pathname.startsWith('/wiki/')){
+      const t = decodeURIComponent(u.pathname.slice(6));
+      const j = await (await withTimeout(fetch(`https://${u.hostname}/api/rest_v1/page/summary/${encodeURIComponent(t)}`), 8000)).json();
+      out = {title: j.title || t.replace(/_/g,' '), sub: j.description || 'Wikipedia', text: j.extract || '', img: j.thumbnail && j.thumbnail.source};
+    } else if (/wiktionary\.org$/.test(u.hostname) && u.pathname.startsWith('/wiki/')){
+      const t = decodeURIComponent(u.pathname.slice(6)).replace(/_/g,' ');
+      const secName = decodeURIComponent(u.hash.slice(1) || 'English').replace(/_/g,' ');
+      const pg = await fetchPage(t); const sec = pg && (langSection(pg.doc, secName) || langSection(pg.doc, 'English'));
+      if (sec){ const m = extractMeanings(sec).slice(0,2); const ety = extractEtymology(sec)[0] || '';
+        out = {title: pg.title, sub: 'Wiktionary · ' + secName, text: m.map(x => `${x.pos}: ${x.defs.slice(0,2).join(' · ')}`).join('\n') + (ety ? '\nOrigin: ' + ety : '')}; }
+    } else if (/wikidata\.org$/.test(u.hostname)){
+      const id = (u.pathname.match(/Q\d+/) || [])[0];
+      if (id){ const j = await (await withTimeout(fetch(`https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&origin=*&props=labels|descriptions&languages=en&ids=${id}`), 8000)).json();
+        const e = j.entities[id]; out = {title: (e.labels.en||{}).value || id, sub: 'Wikidata ' + id, text: (e.descriptions.en||{}).value || ''}; }
+    }
+  }catch(e){}
+  if (!out){ const st = LP_STATIC[u.hostname]; out = st ? {title: st.title, sub: u.hostname, text: st.text} : {title: u.hostname, sub: '', text: 'This link opens an outside website.'}; }
+  lpCache.set(url, out);
+  return out;
+}
+function lpBody(d, short){
+  const txt = short && d.text.length > 260 ? d.text.slice(0, 257) + '…' : d.text;
+  return `${d.img ? `<img class="lp-img" src="${esc(d.img)}" alt="">` : ''}<b>${esc(d.title)}</b>${d.sub ? `<div class="small muted">${esc(d.sub)}</div>` : ''}
+    <div style="white-space:pre-line;margin-top:6px">${esc(txt) || '<span class="muted">No summary available.</span>'}</div>`;
+}
+function openLinkSheet(url){
+  const SITE = {'en.wikipedia.org':'Wikipedia','en.wiktionary.org':'Wiktionary','wikidata.org':'Wikidata','datamuse.com':'Datamuse','creativecommons.org':'Creative Commons'};
+  const host = (() => { try{ const h = new URL(url).hostname.replace(/^www\./,''); return SITE[h] || h; }catch(e){ return 'site'; } })();
+  openSheet(`<div id="lpBody"><div class="loading"><span class="spin" aria-hidden="true"></span> Loading preview…</div></div>
+    <div class="btns"><button class="btn" data-x>Close</button><a class="btn primary" data-external href="${esc(url)}" target="_blank" rel="noopener" style="text-decoration:none">Open on ${esc(host)} ↗</a></div>`, sh => {
+    sh.querySelector('[data-x]').onclick = closeSheet;
+    sh.querySelector('[data-external]').onclick = () => setTimeout(closeSheet, 100);
+    linkPreview(url).then(d => { const b = $('#lpBody'); if (b) b.innerHTML = `<h2 id="sheetTitle" class="sr">${esc(d.title)}</h2>` + lpBody(d, false); });
+  });
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a[href^="http"]');
+  if (!a || a.hasAttribute('data-external')) return;
+  e.preventDefault(); hidePop(); openLinkSheet(a.href);
+});
+// Hover previews on computers (mouse / trackpad)
+const pop = document.createElement('div'); pop.className = 'lp-pop'; pop.setAttribute('role','tooltip'); document.body.appendChild(pop);
+let popTimer = null, popFor = null;
+function hidePop(){ clearTimeout(popTimer); popFor = null; pop.classList.remove('show'); }
+if (matchMedia('(hover: hover) and (pointer: fine)').matches){
+  document.addEventListener('mouseover', e => {
+    const a = e.target.closest && e.target.closest('a[href^="http"]');
+    if (!a || a.hasAttribute('data-external') || a === popFor) return;
+    hidePop(); popFor = a;
+    popTimer = setTimeout(async () => {
+      const d = await linkPreview(a.href); if (popFor !== a) return;
+      pop.innerHTML = lpBody(d, true);
+      const r = a.getBoundingClientRect(); pop.classList.add('show');
+      const w = pop.offsetWidth, h = pop.offsetHeight;
+      pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px';
+      pop.style.top = (r.bottom + h + 12 < innerHeight ? r.bottom + 6 : Math.max(8, r.top - h - 6)) + 'px';
+    }, 450);
+  });
+  document.addEventListener('mouseout', e => { const a = e.target.closest && e.target.closest('a[href^="http"]'); if (a && a === popFor && !a.contains(e.relatedTarget)) hidePop(); });
 }
 
 /* ---------- Start ---------- */

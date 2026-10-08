@@ -49,6 +49,10 @@
 - [x] Right-to-left words (Hebrew, Arabic…) in Simple lists and Bridging boxes now sit at the left edge like other words (they still read right-to-left)
 - [x] Name meanings: names show a "Name meaning" card with the meaning/origin sentences from the name's English Wikipedia article (found through Wikidata), plus Wiktionary's name origin; saved names and searched Bridging words keep the meaning
 
+## Done (v1.8.0, 8 Oct 2026)
+- [x] Smarter name meanings: if a name comes from another name (Tania → diminutive of Tatiana → derivative of Tatius), the root name's meaning is looked up and shown too (Wiktionary name entries + Wikipedia, up to 2 steps)
+- [x] Links open an in-app pop-up preview (Wikipedia summary, Wiktionary meaning, Wikidata description) with an "Open on …" button; on computers hovering a link shows a quick preview
+
 ## Next
 - [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
 - [ ] Later: biblical name meanings (e.g. Hitchcock's Bible Names / BDB via Bolls.life) for names Wikipedia doesn't explain
