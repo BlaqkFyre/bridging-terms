@@ -121,6 +121,7 @@ ol.defs li{margin:2px 0}
 .tag.cmp{background:transparent;border:1px solid var(--teal);color:var(--teal)}
 .tag.wd{background:var(--wdbg);color:var(--wd)}
 .tag.dm{background:var(--wdbg);color:var(--wd)}
+.tag.xl{background:transparent;border:1px solid var(--line);color:var(--muted);font-weight:500}
 .alt-defs{list-style:disc}
 
 .cards{display:block}
@@ -230,7 +231,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -574,6 +575,29 @@ async function lookup(word, code){
   return res;
 }
 
+// Wiktionary's transliteration rules ({{xlit}}): one request transliterates many words.
+// Works for Russian, Greek, Ancient Greek, Arabic (with vowel marks), Hindi, Korean, Chinese (pinyin) and more;
+// returns nothing where the script can't be read without vowels (e.g. unpointed Hebrew).
+const XLIT_CODE = {hbo:'he'};
+async function xlitBatch(pairs){
+  const xc = store.get('xlit', {});
+  const out = pairs.map(p => xc[p.code + '|' + p.word]);
+  const need = pairs.map((p,i) => ({p, i})).filter(x => out[x.i] === undefined);
+  for (let k = 0; k < need.length; k += 40){
+    const chunk = need.slice(k, k + 40);
+    const text = chunk.map(x => `{{xlit|${XLIT_CODE[x.p.code] || x.p.code}|${x.p.word.replace(/[|{}\n\r]/g,' ')}}}`).join('\n');
+    const body = new URLSearchParams({action:'expandtemplates', format:'json', formatversion:'2', origin:'*', prop:'wikitext', text});
+    const r = await withTimeout(fetch('https://en.wiktionary.org/w/api.php', {method:'POST', body}), 10000);
+    const lines = ((await r.json()).expandtemplates || {}).wikitext;
+    if (typeof lines !== 'string') throw new Error('xlit failed');
+    const arr = lines.split('\n');
+    chunk.forEach((x, j) => { const v = (arr[j] || '').replace(/<[^>]+>/g,'').trim(); out[x.i] = v; xc[x.p.code + '|' + x.p.word] = v; });
+  }
+  const ks = Object.keys(xc); if (ks.length > 2000) ks.slice(0, ks.length - 2000).forEach(k => delete xc[k]);
+  store.set('xlit', xc);
+  return out.map(v => v || '');
+}
+
 // Look up a translated term's own entry for a transliteration / IPA (and the Tiberian reading for Biblical Hebrew)
 async function enrichTerm(code, t){
   const key = code + '|' + t.page;
@@ -610,7 +634,10 @@ function respell(tr, code){
   if (!tr || !L[code] || !L[code].respell) return '';
   const greek = code==='el' || code==='grc';
   const semitic = ['he','hbo','arc','ar'].includes(code);
-  return tr.split(/\s*[,;\/]\s*/).map(part => part.split(/[\s\-‐]+/).filter(Boolean).map(w => respellWord(w, greek, semitic)).filter(Boolean).join(' ')).filter(Boolean).join(', ');
+  const out = tr.split(/\s*[,;\/]\s*/).map(part => part.split(/[\s\-‐]+/).filter(Boolean).map(w => respellWord(w, greek, semitic)).filter(Boolean).join(' ')).filter(Boolean).join(', ');
+  // skip the respelling when it would just repeat the transliteration (e.g. "mir")
+  const plain = tr.normalize('NFD').replace(/[\u0300-\u036F]/g,'').toLowerCase().replace(/[^a-z, ]/g,'');
+  return out.toLowerCase().replace(/[^a-z, ]/g,'') === plain ? '' : out;
 }
 function respellWord(w, greek, semitic){
   const s = w.normalize('NFD').toLowerCase();
@@ -638,7 +665,8 @@ function respellWord(w, greek, semitic){
     if (/\u030C/.test(m)) out = ({s:'sh', z:'zh', c:'ch', r:'rzh'})[c] || c;            // š ž č
     else if (/\u0323/.test(m)) out = ({h:'kh', s:'s', t:'t', d:'d', z:'z', k:'k'})[c] || c; // ḥ ṣ ṭ ḍ
     else if (/\u0331/.test(m)) out = ({d:'dh', t:'th', k:'kh', b:'v', g:'gh', p:'f'})[c] || c; // ḏ ṯ
-    else if (/\u0307/.test(m)) out = ({g:'gh', z:'z'})[c] || c;                             // ġ
+    else if (/\u0307/.test(m)) out = ({g:'gh', z:'z'})[c] || c;
+    else if (/\u0301/.test(m) && c === 's') out = 'sh';                                  // ś (Hindi/Sanskrit)                             // ġ
     const nx = chars[i+1] && chars[i+1].c;
     if (nx && ['sh','kh','ch','th','ph','ts','tz','zh','dh','gh'].includes(c+nx) && !(V.includes(nx))){
       out = c + nx; i++;
@@ -900,7 +928,8 @@ function renderResults(res){
   r.querySelectorAll('[data-save-c]').forEach(b => b.onclick = () => {
     const t = cardTerms(res, b.dataset.saveC)[+b.dataset.i];
     const c = b.dataset.saveC;
-    const item = {word: t.term, lang: c, langName: langName(c), tr: t.tr || '', respell: respell(t.tr, c), ipa: (c==='hbo' ? t.tiberian : t.ipa) || '',
+    const trx = t.tr || t._tr || '';
+    const item = {word: t.term, lang: c, langName: langName(c), tr: trx, trSrc: !t.tr && t._trXlit ? 'xlit' : '', respell: respell(trx, c), ipa: (c==='hbo' ? t.tiberian : t.ipa) || '',
       meaning: (t.gloss ? t.gloss + ' — ' : '') + res.title, en: res.title, source: t.src || 'wiktionary', url: t.src==='wikidata' && res.wd ? res.wd.url : WIKT(t.page)};
     saveSheet(item, () => renderResults(res));
   });
@@ -922,7 +951,7 @@ function termHTML(res, c, t, i){
   const ipa = c === 'hbo' ? (t._tiberian || '') : (t._ipa || '');
   const needsTr = !lang.latin;
   const sayParts = [];
-  if (tr) sayParts.push(`${esc(tr)}${t._trFromEntry ? '' : ''}`);
+  if (tr) sayParts.push(`${esc(tr)}${t._trXlit ? ' <span class="tag xl" title="Transliterated using Wiktionary\'s transliteration rules">Wiktionary rules</span>' : ''}`);
   if (rs) sayParts.push(`<b>${esc(rs)}</b> <span class="tag auto" title="Machine-generated easy-read respelling">auto</span>`);
   return `<div class="term"><div class="main">
       <span class="script"${langAttr(c)}>${esc(t.term)}</span>
@@ -948,12 +977,21 @@ async function enrichCard(res, c){
   const terms = cardTerms(res, c); if (!terms.length) return;
   const lang = L[c];
   const targets = terms.slice(0, 2).filter(t => !t._done && ((!lang.latin && !t.tr) || lang.latin || c==='hbo' || !t._ipa));
-  if (!targets.length) return;
+  if (!targets.length && (lang.latin || terms.every(t => t.tr || t._tr || t._xlitTried))) return;
   await Promise.all(targets.map(async t => {
     const e = await enrichTerm(c, t);
     if (!t.tr && e.tr){ t._tr = e.tr; t._trFromEntry = true; }
     t._ipa = e.ipa; t._tiberian = e.tiberian; t._done = true;
   }));
+  if (!lang.latin){
+    const missing = terms.filter(t => !t.tr && !t._tr && !t._xlitTried);
+    if (missing.length){
+      try{
+        const xs = await xlitBatch(missing.map(t => ({code:c, word:t.term})));
+        missing.forEach((t, i) => { if (xs[i]){ t._tr = xs[i]; t._trXlit = true; } t._xlitTried = true; });
+      }catch(e){}
+    }
+  }
   if (current !== res) return;
   const card = document.querySelector(`[data-card="${c}"]`);
   if (!card) return;
@@ -963,7 +1001,7 @@ async function enrichCard(res, c){
   nc.querySelectorAll('[data-save-c]').forEach(b => b.onclick = () => {
     const t = cardTerms(res, c)[+b.dataset.i];
     const tr = t.tr || t._tr || '';
-    saveSheet({word:t.term, lang:c, langName:langName(c), tr, respell:respell(tr,c), ipa:(c==='hbo'?t._tiberian:t._ipa)||'', meaning:(t.gloss?t.gloss+' — ':'')+res.title, en:res.title, source:t.src||'wiktionary', url: t.src==='wikidata' && res.wd ? res.wd.url : WIKT(t.page)});
+    saveSheet({word:t.term, lang:c, langName:langName(c), tr, trSrc: t._trXlit ? 'xlit' : '', respell:respell(tr,c), ipa:(c==='hbo'?t._tiberian:t._ipa)||'', meaning:(t.gloss?t.gloss+' — ':'')+res.title, en:res.title, source:t.src||'wiktionary', url: t.src==='wikidata' && res.wd ? res.wd.url : WIKT(t.page)});
   });
 }
 
@@ -982,7 +1020,7 @@ function renderLists(){
 }
 function itemHTML(it, opts={}){
   const d = displayWord(it);
-  const say = [isNonLatin(it.word) && !d.missing ? `<span class="orig"${langAttr(it.lang)}>${esc(it.word)}</span>` : '', it.tr && esc(it.tr), it.respell && `<b>${esc(it.respell)}</b>`, d.auto ? `${esc(it.autoTr)} <span class="tag auto">auto</span>` : ''].filter(Boolean).join(' · ');
+  const say = [isNonLatin(it.word) && !d.missing ? `<span class="orig"${langAttr(it.lang)}>${esc(it.word)}</span>` : '', it.tr && (esc(it.tr) + (it.trSrc === 'xlit' ? ' <span class="tag xl" title="Transliterated using Wiktionary\'s transliteration rules">Wiktionary rules</span>' : '')), it.respell && `<b>${esc(it.respell)}</b>`, d.auto ? `${esc(it.autoTr)} <span class="tag auto">auto</span>` : ''].filter(Boolean).join(' · ');
   return `<div class="item"><div class="main">
     ${dwHTML(it)}${d.missing ? ' <span class="small muted">(no transliteration found)</span>' : ''}
     <div class="small">${say ? say + ' · ' : ''}${esc(L[it.lang] ? langName(it.lang) : (it.langName || it.lang))}${it.source==='typed' ? ' <span class="tag plain">typed</span>' : ''}</div>
@@ -1010,20 +1048,31 @@ function renderList(id){
 let translitBusy = false;
 async function fillTranslits(l){
   if (translitBusy) return;
-  const todo = l.items.filter(it => isNonLatin(it.word) && !it.tr && !it.trTried);
+  const todo = l.items.filter(it => isNonLatin(it.word) && !it.tr && (!it.trTried || !it.xlitTried));
   if (!todo.length) return;
   translitBusy = true;
   let changed = false;
+  const online = navigator.onLine !== false;
+  // 1) the word's own Wiktionary entry (dictionary transliteration + IPA)
   for (const it of todo){
-    if (navigator.onLine !== false && L[it.lang]){
-      let e; try{ e = await enrichTerm(it.lang, {page: titleForm(it.word, it.lang)}); }catch(err){ e = {err:true}; }
-      if (e.err){ if (!it.autoTr){ const a = autoTranslit(it.word); if (a){ it.autoTr = a; changed = true; } } continue; }   // network problem: try the dictionary again next time
-      try{ if (e.tr){ it.tr = e.tr; it.respell = it.respell || respell(e.tr, it.lang); } if (!it.ipa && e.ipa) it.ipa = it.lang==='hbo' ? (e.tiberian||'') : e.ipa; }
-      catch(err){ continue; }
-    }
-    if (!it.tr){ const a = autoTranslit(it.word); if (a) it.autoTr = a; }
+    if (it.trTried || !online || !L[it.lang]) continue;
+    let e; try{ e = await enrichTerm(it.lang, {page: titleForm(it.word, it.lang)}); }catch(err){ e = {err:true}; }
+    if (e.err) continue;                     // network problem: try again next time
+    if (e.tr){ it.tr = e.tr; it.trSrc = 'entry'; it.respell = it.respell || respell(e.tr, it.lang); delete it.autoTr; }
+    if (!it.ipa && e.ipa) it.ipa = it.lang==='hbo' ? (e.tiberian||'') : e.ipa;
     it.trTried = true; changed = true;
   }
+  // 2) Wiktionary's transliteration rules for anything still missing
+  const need = todo.filter(it => !it.tr && !it.xlitTried && L[it.lang] && !L[it.lang].latin);
+  if (need.length && online){
+    try{
+      const xs = await xlitBatch(need.map(it => ({code: it.lang, word: it.word})));
+      need.forEach((it, i) => { if (xs[i]){ it.tr = xs[i]; it.trSrc = 'xlit'; it.respell = it.respell || respell(xs[i], it.lang); delete it.autoTr; } it.xlitTried = true; });
+      changed = true;
+    }catch(e){}
+  }
+  // 3) last resort: simple letter-by-letter (Greek / Cyrillic only), marked "auto"
+  for (const it of todo){ if (!it.tr && !it.autoTr){ const a = autoTranslit(it.word); if (a){ it.autoTr = a; changed = true; } } }
   translitBusy = false;
   if (changed){ saveLists(); const r = route(); if (r.name === 'list' && r.id === l.id) render(); }
 }
@@ -1158,7 +1207,7 @@ $('#importFile').addEventListener('change', async e => {
 function normList(x){
   if (!x || typeof x !== 'object' || !Array.isArray(x.items)) return null;
   const l = {id: String(x.id || uid()), name: String(x.name || 'Imported list'), type: x.type === 'compare' ? 'compare' : 'simple', created: x.created || new Date().toISOString(),
-    items: x.items.filter(i => i && i.word).map(i => ({id:String(i.id||uid()), word:String(i.word), lang:String(i.lang||'en'), langName:String(i.langName||langName(i.lang)), tr:String(i.tr||''), respell:String(i.respell||''), ipa:String(i.ipa||''), meaning:String(i.meaning||''), en:i.en?String(i.en):undefined, autoTr:i.autoTr?String(i.autoTr):undefined, trTried:!!i.trTried, source:i.source==='typed'?'typed':'wiktionary', url: /^https:\/\//.test(i.url||'') ? i.url : '', saved:i.saved||new Date().toISOString()})),
+    items: x.items.filter(i => i && i.word).map(i => ({id:String(i.id||uid()), word:String(i.word), lang:String(i.lang||'en'), langName:String(i.langName||langName(i.lang)), tr:String(i.tr||''), respell:String(i.respell||''), ipa:String(i.ipa||''), meaning:String(i.meaning||''), en:i.en?String(i.en):undefined, autoTr:i.autoTr?String(i.autoTr):undefined, trTried:!!i.trTried, xlitTried:!!i.xlitTried, trSrc:['entry','xlit'].includes(i.trSrc)?i.trSrc:'', source:i.source==='typed'?'typed':'wiktionary', url: /^https:\/\//.test(i.url||'') ? i.url : '', saved:i.saved||new Date().toISOString()})),
     combos: Array.isArray(x.combos) ? x.combos.filter(c => c && Array.isArray(c.slots)).map(c => ({id:String(c.id||uid()), name:String(c.name||'Combination'), n:[2,3,4].includes(c.n)?c.n:2, slots:c.slots.slice(0,4).map(s=>s?String(s):null), saved:c.saved||new Date().toISOString()})) : []};
   if (l.type === 'compare') l.boxes = x.boxes && Array.isArray(x.boxes.slots) ? {n:[2,3,4].includes(x.boxes.n)?x.boxes.n:2, slots:x.boxes.slots.slice(0,4), active:null, view:x.boxes.view==='details'?'details':'simple'} : {n:2, slots:[null,null,null,null], active:0};
   return l;
@@ -1179,7 +1228,7 @@ function renderSettings(){
       <div class="btns"><button class="btn" id="sEx">Export lists</button><button class="btn" id="sIm">Import lists</button><button class="btn" id="sClr">Clear search history</button></div>
       <p class="small muted">${cacheN} looked-up word(s) are kept on this device so they reopen instantly. Lists and settings are stored only in this browser — export regularly as a backup.</p>
       <h3>About the data</h3>
-      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/" target="_blank" rel="noopener">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. Transliterations are from Wiktionary’s translation tables or the word’s own entry. The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>).</p>
+      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/" target="_blank" rel="noopener">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. Transliterations come from Wiktionary’s translation tables or the word’s own entry; when neither has one, Wiktionary’s transliteration rules are used (marked <span class="tag xl">Wiktionary rules</span>). The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>).</p>
       <p class="small muted">Biblical Hebrew isn’t listed separately on Wiktionary, so that card shows the Hebrew word with its Biblical Hebrew (Tiberian) pronunciation when the entry has one. Koine Greek is listed under Ancient Greek.</p>
       <p class="credit">Bridging Terms v${APP_VERSION}</p>
     </div>`;

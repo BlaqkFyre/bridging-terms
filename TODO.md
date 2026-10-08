@@ -32,7 +32,14 @@
 ## Done (v1.3.0, 8 Oct 2026)
 - [x] Compare up to 8 languages at once (first 4 language cards open, the rest start collapsed with the word shown in the header)
 
+## Done (v1.4.0, 8 Oct 2026)
+- [x] Missing English transliterations filled with Wiktionary's transliteration rules (Russian, Greek, Ancient Greek, Arabic with vowel marks, Hindi, Korean, Chinese pinyin and more) — in result cards and in lists, marked "Wiktionary rules"; older "auto" letter-by-letter transliterations upgraded automatically
+- [x] Easy-read respelling hidden when it would just repeat the transliteration; Hindi ś now reads "sh"
+
 ## Next
+- [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
+- [ ] Later: Wikipedia cross-language links for names of people/places (e.g. Luke → Λουκάς, لوقا)
+- [ ] Later (optional): Sefaria Hebrew/Aramaic dictionary panel; Tatoeba example sentences; MyMemory machine translation (marked "machine")
 - [ ] Typed words with no transliteration found (e.g. unpointed Hebrew not on Wiktionary): let me add one by hand
 - [x] Published at https://blaqkfyre.github.io/bridging-terms/
 - [ ] Live-test v1.2 on Android, iPhone and PC after pushing
