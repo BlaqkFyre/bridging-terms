@@ -171,6 +171,7 @@ ol.defs li{margin:2px 0}
 .box .script{font-size:1.5rem}
 .typein{border:1.5px dashed var(--teal);border-radius:var(--r-pill);padding:10px 12px;background:var(--card);margin:8px 0}
 .typein .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:6px}
+.tpreview{margin-top:10px;padding:10px 12px;border-radius:14px;background:var(--tealbg);display:flex;flex-direction:column;gap:3px}
 .typein input,.typein select{width:100%;border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:8px 10px;min-height:44px}
 .unlock{border:0;background:transparent;cursor:pointer;color:var(--teal);font-size:.8rem;padding:4px;display:inline-flex;align-items:center;gap:3px}
 .boxrm{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;cursor:pointer;font-size:.78rem;padding:2px 8px;min-height:28px;display:inline-flex;align-items:center;gap:4px}
@@ -231,7 +232,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -258,19 +259,62 @@ const LANGS = [
 const L = Object.fromEntries(LANGS.map(l => [l.code, l]));
 const langName = c => (L[c] ? L[c].name : c);
 const MAX_COMPARE = 8;
+const LANGS_AZ = [...LANGS].sort((a, b) => a.name.localeCompare(b.name));
 
 /* ---------- Storage (guarded) ---------- */
+// Look-up caches can always be thrown away; lists and settings never are.
+const CACHE_KEYS = ['cache2','terms2','xlit'];
 const store = {
   get(k, def){ try{ const v = localStorage.getItem('bt.'+k); return v ? JSON.parse(v) : def; }catch(e){ return def; } },
-  set(k, v){ try{ localStorage.setItem('bt.'+k, JSON.stringify(v)); return true; }catch(e){ toast('Could not save on this device (storage full or blocked)'); return false; } }
+  set(k, v){
+    let val; try{ val = JSON.stringify(v); }catch(e){ return false; }
+    for (let attempt = 0; attempt < 2; attempt++){
+      try{ localStorage.setItem('bt.'+k, val); return true; }
+      catch(e){
+        // storage full: free space by clearing the look-up caches, then try once more
+        CACHE_KEYS.filter(c => c !== k).forEach(c => { try{ localStorage.removeItem('bt.'+c); }catch(_){} });
+        if (CACHE_KEYS.includes(k)) { try{ localStorage.removeItem('bt.'+k); }catch(_){} }
+      }
+    }
+    if (!CACHE_KEYS.includes(k)) toast('Could not save on this device — your lists are still kept in the backup copy. Use Export to be safe.');
+    return false;
+  }
 };
+// Remove caches from older versions (they could fill the browser's storage and block list saving)
+['cache','terms'].forEach(k => { try{ localStorage.removeItem('bt.'+k); }catch(e){} });
+
+// Second copy of the lists in IndexedDB (more durable than localStorage, survives a full localStorage)
+const backup = {
+  p: null,
+  open(){
+    if (!this.p) this.p = new Promise((res, rej) => {
+      try{ const r = indexedDB.open('bridging-terms', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
+      catch(e){ rej(e); }
+    });
+    return this.p;
+  },
+  async put(k, v){ try{ const db = await this.open(); await new Promise((res, rej) => { const tx = db.transaction('kv','readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); return true; }catch(e){ return false; } },
+  async get(k){ try{ const db = await this.open(); return await new Promise((res, rej) => { const r = db.transaction('kv').objectStore('kv').get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }catch(e){ return undefined; } }
+};
+// Ask the browser not to clear this app's storage when the phone runs low on space
+let persistAsked = false;
+async function requestPersist(){
+  if (persistAsked || !navigator.storage || !navigator.storage.persist) return;
+  persistAsked = true;
+  try{ if (!(await navigator.storage.persisted())) await navigator.storage.persist(); }catch(e){}
+}
 let settings = Object.assign({theme:'auto', defaultLang:'en', compare:['he','grc','es']}, store.get('settings', {}));
 let lists = store.get('lists', []);
 // v1.2: combination names use single spaces instead of " / "
 lists.forEach(l => (l.combos || []).forEach(c => { if (/\s\/\s/.test(c.name)) c.name = c.name.replace(/\s+\/\s+/g, ' '); }));
 let recent = store.get('recent', []);
 const saveSettings = () => store.set('settings', settings);
-const saveLists = () => store.set('lists', lists);
+function saveLists(){
+  const at = Date.now();
+  store.set('lists', lists); store.set('listsSavedAt', at);
+  backup.put('lists', {lists: JSON.parse(JSON.stringify(lists)), savedAt: at});
+  requestPersist();
+}
 
 /* ---------- Helpers ---------- */
 const $ = (s, el=document) => el.querySelector(s);
@@ -308,7 +352,7 @@ $('#themeBtn').addEventListener('click', () => {
 /* ---------- Wiktionary data layer ---------- */
 const API = 'https://en.wiktionary.org/w/api.php?action=parse&format=json&formatversion=2&origin=*&redirects=1&prop=text&disableeditsection=1&disablelimitreport=1&page=';
 const WIKT = t => 'https://en.wiktionary.org/wiki/' + encodeURIComponent(t.replace(/ /g,'_'));
-const CACHE_MAX = 300;
+const CACHE_MAX = 120;
 const POS = /^(Noun|Proper noun|Verb|Adjective|Adverb|Interjection|Pronoun|Preposition|Conjunction|Particle|Numeral|Determiner|Article|Phrase|Prepositional phrase|Proverb|Idiom|Prefix|Suffix|Contraction|Letter|Symbol|Participle|Root)\b/i;
 
 async function fetchPage(title){
@@ -568,6 +612,7 @@ async function lookup(word, code){
     return anyPage ? { word, lang:code, notFound:'lang', title: anyPage.title } : { word, lang:code, notFound:'page' };
   }
   if (!sec) res.noWiktionary = true;
+  for (const k in res.translations) res.translations[k] = res.translations[k].slice(0, 6);
   cache[key] = res;
   const keys = Object.keys(cache);
   if (keys.length > CACHE_MAX) keys.sort((a,b)=>(cache[a].fetched||'').localeCompare(cache[b].fetched||'')).slice(0, keys.length-CACHE_MAX).forEach(k=>delete cache[k]);
@@ -866,14 +911,14 @@ async function doSearch(word){
 }
 function pickDefaultLang(){
   openSheet(`<h2 id="sheetTitle">Default language</h2><p class="small muted" style="margin:0 0 6px">The language of the words you type.</p>
-    ${LANGS.filter(l=>l.code!=='hbo').map(l => `<label class="check"><span>${esc(l.name)}</span><input type="radio" name="dl" value="${l.code}" ${l.code===settings.defaultLang?'checked':''}></label>`).join('')}
+    ${LANGS_AZ.filter(l=>l.code!=='hbo').map(l => `<label class="check"><span>${esc(l.name)}</span><input type="radio" name="dl" value="${l.code}" ${l.code===settings.defaultLang?'checked':''}></label>`).join('')}
     <div class="btns"><button class="btn primary" data-ok>Done</button></div>`, sh => {
     sh.querySelector('[data-ok]').onclick = () => { const c = sh.querySelector('input[name=dl]:checked').value; settings.defaultLang = c; saveSettings(); current = null; closeSheet(); render(); };
   });
 }
 function pickCompareLangs(){
   openSheet(`<h2 id="sheetTitle">Compare languages</h2><p class="small muted" style="margin:0 0 6px">Pick up to ${MAX_COMPARE}.</p>
-    <div id="lc">${LANGS.filter(l=>l.code!==settings.defaultLang).map(l => `<label class="check"><span>${esc(l.name)}</span><input type="checkbox" value="${l.code}" ${settings.compare.includes(l.code)?'checked':''}></label>`).join('')}</div>
+    <div id="lc">${LANGS_AZ.filter(l=>l.code!==settings.defaultLang).map(l => `<label class="check"><span>${esc(l.name)}</span><input type="checkbox" value="${l.code}" ${settings.compare.includes(l.code)?'checked':''}></label>`).join('')}</div>
     <p class="small muted" id="lcn" aria-live="polite"></p>
     <div class="btns"><button class="btn" data-x>Cancel</button><button class="btn primary" data-ok>Done</button></div>`, sh => {
     const boxes = [...sh.querySelectorAll('#lc input')];
@@ -1114,10 +1159,12 @@ function compareHTML(l){
   }
   const used = new Set(b.slots.slice(0,b.n).filter(Boolean));
   const filled = b.slots.slice(0,b.n).filter(s => s && item(s)).length;
-  const typeIn = b.active >= 0 ? `<div class="typein"><label class="small" for="typeW">Type a word for box ${b.active+1} (saved exactly as typed)</label>
+  const typeIn = b.active >= 0 ? `<div class="typein"><label class="small" for="typeW">Type a word for box ${b.active+1} — Lock in saves it as typed, or Search first to add its meaning</label>
       <div class="row"><input id="typeW" placeholder="Type a word…" autocomplete="off">
-      <select id="typeL" aria-label="Language of typed word">${LANGS.map(x=>`<option value="${x.code}" ${x.code===(l.lastLang||settings.defaultLang)?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
-      <button class="btn primary" id="typeGo">Lock in</button></div></div>` : '';
+      <select id="typeL" aria-label="Language of typed word">${LANGS_AZ.map(x=>`<option value="${x.code}" ${x.code===(l.lastLang||settings.defaultLang)?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
+      <button class="btn" id="typeSearch">Search</button>
+      <button class="btn primary" id="typeGo">Lock in</button></div>
+      <div id="typePreview" aria-live="polite"></div></div>` : '';
   return `
     <div class="seg" role="group" aria-label="Number of boxes">${[2,3,4].map(n=>`<button data-n="${n}" aria-pressed="${b.n===n}">${n} boxes</button>`).join('')}</div>
     <div class="seg two" role="group" aria-label="Box display">${['simple','details'].map(m=>`<button data-view="${m}" aria-pressed="${view===m}">${m==='simple'?'Simple':'Details'}</button>`).join('')}</div>
@@ -1136,6 +1183,34 @@ function compareHTML(l){
       ${l.items.length ? [...l.items].reverse().map(it => itemHTML(it, {remove:true})).join('') : '<p class="muted small">No words yet.</p>'}
     </div></details>`;
 }
+// Look up a word typed into a Bridging box: meaning + transliteration/pronunciation, same sources as Search
+async function typedLookup(w, lang){
+  const res = await lookup(w, lang);
+  if (res.notFound) return null;
+  const alt = res.alt || [];
+  const m = res.meanings[0] || (res.name && res.name.meanings[0]);
+  const meaning = (m && m.defs[0]) || (alt[0] && alt[0].def) || (res.wd && res.wd.description) || '';
+  const pos = m ? m.pos : (alt[0] && alt[0].pos) || '';
+  let tr = '', trSrc = '', ipa = '';
+  try{
+    const e = await enrichTerm(lang, {page: titleForm(res.title || w, lang)});
+    if (isNonLatin(w) && e.tr){ tr = e.tr; trSrc = 'entry'; }
+    ipa = lang === 'hbo' ? (e.tiberian || '') : (e.ipa || '');
+  }catch(e){}
+  if (isNonLatin(w) && !tr){ try{ const xs = await xlitBatch([{code: lang, word: w}]); if (xs[0]){ tr = xs[0]; trSrc = 'xlit'; } }catch(e){} }
+  return {word: w, lang, title: res.title, pos, meaning: meaning.length > 160 ? meaning.slice(0,157) + '…' : meaning, tr, trSrc, respell: respell(tr, lang), ipa,
+    source: res.noWiktionary ? (alt.length ? 'datamuse' : 'wikidata') : 'wiktionary', url: res.url || (res.wd && res.wd.url) || ''};
+}
+function typedPreviewHTML(f){
+  const say = [f.tr && esc(f.tr) + (f.trSrc === 'xlit' ? ' <span class="tag xl">Wiktionary rules</span>' : ''), f.respell && `<b>${esc(f.respell)}</b> <span class="tag auto">auto</span>`].filter(Boolean).join(' · ');
+  const src = {wiktionary:'<span class="tag">Wiktionary</span>', datamuse:'<span class="tag dm">Datamuse (WordNet)</span>', wikidata:'<span class="tag wd">Wikidata</span>'}[f.source] || '';
+  return `<div class="tpreview">
+    <div><span class="dword"${isNonLatin(f.word) ? langAttr(f.lang) : ''}>${esc(isNonLatin(f.word) ? f.word : cap(f.word))}</span> <span class="small muted">${esc(f.pos.toLowerCase())}</span></div>
+    ${say ? `<div class="small">${say}</div>` : ''}
+    ${f.ipa ? `<div class="small muted">IPA: ${esc(f.ipa)}</div>` : ''}
+    ${f.meaning ? `<div class="small">${esc(f.meaning)}</div>` : '<div class="small muted">No definition found.</div>'}
+    <div class="small muted" style="margin-top:4px">${src} Tap <b>Lock in</b> to save it with this information.</div></div>`;
+}
 function wireCompare(l){
   const v = $('#view'); const b = l.boxes;
   const fill = (itemId) => {
@@ -1152,11 +1227,31 @@ function wireCompare(l){
   v.querySelectorAll('[data-pick]').forEach(x => x.onclick = () => fill(x.dataset.pick));
   const go = $('#typeGo');
   if (go){
+    let found = null;   // result of "Search" for the word currently typed
+    const clearFound = () => { found = null; $('#typePreview').innerHTML = ''; };
+    $('#typeW').addEventListener('input', clearFound);
+    $('#typeL').addEventListener('change', clearFound);
+    $('#typeSearch').onclick = async () => {
+      const w = $('#typeW').value.trim(); if (!w) return $('#typeW').focus();
+      const lang = $('#typeL').value;
+      const pv = $('#typePreview');
+      pv.innerHTML = `<div class="loading" role="status"><span class="spin" aria-hidden="true"></span> Looking up “${esc(w)}”…</div>`;
+      try{
+        found = await typedLookup(w, lang);
+        if ($('#typeW').value.trim() !== w || $('#typeL').value !== lang) return;   // input changed meanwhile
+        pv.innerHTML = found ? typedPreviewHTML(found) : `<div class="note small">No dictionary entry found for “${esc(w)}”. Lock in will save it exactly as typed.</div>`;
+      }catch(e){
+        found = null;
+        pv.innerHTML = `<div class="note small">${navigator.onLine === false ? 'You’re offline — searching needs internet.' : 'Couldn’t reach the dictionary just now.'} Lock in will save it as typed.</div>`;
+      }
+    };
     const lock = () => {
       const w = $('#typeW').value.trim(); if (!w) return $('#typeW').focus();
       const lang = $('#typeL').value; l.lastLang = lang;
+      const info = found && found.word === w && found.lang === lang ? found : null;
       let it = l.items.find(i => i.word === w && i.lang === lang);
       if (!it){ it = {id:uid(), word:w, lang, langName:langName(lang), tr:'', respell:'', ipa:'', meaning:'', source:'typed', saved:new Date().toISOString()}; l.items.push(it); }
+      if (info){ Object.assign(it, {tr: info.tr, trSrc: info.trSrc, respell: info.respell, ipa: info.ipa, meaning: info.meaning, source: info.source, url: info.url, trTried: true, xlitTried: true}); delete it.autoTr; }
       fill(it.id);
     };
     go.onclick = lock;
@@ -1226,12 +1321,25 @@ function renderSettings(){
         <button class="btn choice" id="sCmp">Compare languages<small>${esc(settings.compare.map(langName).join(', ') || 'none')}</small></button></div>
       <h3>Your data</h3>
       <div class="btns"><button class="btn" id="sEx">Export lists</button><button class="btn" id="sIm">Import lists</button><button class="btn" id="sClr">Clear search history</button></div>
-      <p class="small muted">${cacheN} looked-up word(s) are kept on this device so they reopen instantly. Lists and settings are stored only in this browser — export regularly as a backup.</p>
+      <p class="small muted">${cacheN} looked-up word(s) are kept on this device so they reopen instantly.</p>
+      <div class="info small" id="storeStatus">Checking storage…</div>
+      <p class="small muted">Lists are saved on this device every time you change them (two copies), and stay after closing the app or restarting the phone. They are not online: export now and then as a backup, or to move lists between phone and PC. On iPhone, Safari and the home-screen app keep separate lists — use one of them.</p>
       <h3>About the data</h3>
       <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/" target="_blank" rel="noopener">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. Transliterations come from Wiktionary’s translation tables or the word’s own entry; when neither has one, Wiktionary’s transliteration rules are used (marked <span class="tag xl">Wiktionary rules</span>). The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>).</p>
       <p class="small muted">Biblical Hebrew isn’t listed separately on Wiktionary, so that card shows the Hebrew word with its Biblical Hebrew (Tiberian) pronunciation when the entry has one. Koine Greek is listed under Ancient Greek.</p>
       <p class="credit">Bridging Terms v${APP_VERSION}</p>
     </div>`;
+  (async () => {
+    const el = $('#storeStatus'); if (!el) return;
+    let persisted = false, est = null;
+    try{ persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : false; }catch(e){}
+    try{ est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null; }catch(e){}
+    const b = await backup.get('lists');
+    const items = lists.reduce((n,l) => n + l.items.length, 0);
+    el.innerHTML = `<b>${lists.length} list(s), ${items} word(s) saved on this device.</b><br>`
+      + (persisted ? '✓ Protected: the browser won’t clear this app’s data to free up space.' : 'Standard storage: kept after closing or restarting. The browser may only clear it if the phone runs very low on space or you clear site data.')
+      + `<br>Backup copy: ${b ? '✓ in place' : 'not available in this browser'}${est && est.usage ? ` · using ${est.usage < 1048576 ? Math.max(1, Math.round(est.usage/1024)) + ' KB' : (est.usage/1048576).toFixed(1) + ' MB'}` : ''}`;
+  })();
   v.querySelectorAll('[data-theme-set]').forEach(b => b.onclick = () => { settings.theme = b.dataset.themeSet; saveSettings(); applyTheme(); render(); });
   $('#sDef').onclick = pickDefaultLang; $('#sCmp').onclick = pickCompareLangs;
   $('#sEx').onclick = exportData; $('#sIm').onclick = () => $('#importFile').click();
@@ -1241,6 +1349,17 @@ function renderSettings(){
 /* ---------- Start ---------- */
 applyTheme();
 render();
+(async () => {
+  const b = await backup.get('lists');
+  const localAt = store.get('listsSavedAt', 0);
+  if (b && Array.isArray(b.lists) && (b.savedAt || 0) > localAt){
+    lists = b.lists; store.set('lists', lists); store.set('listsSavedAt', b.savedAt);
+    render(); if (b.lists.length) toast('Lists restored from this device’s backup copy');
+  } else if (lists.length){
+    backup.put('lists', {lists: JSON.parse(JSON.stringify(lists)), savedAt: localAt || Date.now()});
+    requestPersist();
+  }
+})();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>

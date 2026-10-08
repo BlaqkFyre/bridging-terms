@@ -36,6 +36,12 @@
 - [x] Missing English transliterations filled with Wiktionary's transliteration rules (Russian, Greek, Ancient Greek, Arabic with vowel marks, Hindi, Korean, Chinese pinyin and more) — in result cards and in lists, marked "Wiktionary rules"; older "auto" letter-by-letter transliterations upgraded automatically
 - [x] Easy-read respelling hidden when it would just repeat the transliteration; Hindi ś now reads "sh"
 
+## Done (v1.5.0, 8 Oct 2026)
+- [x] Language pickers (default, compare, Bridging box) in alphabetical order
+- [x] Bridging boxes: typed words can be searched before locking — shows meaning, transliteration, respelling and IPA like a searched word; Lock in without searching still saves it as typed
+- [x] Safer saving on phones: lists saved to two places on the device (localStorage + IndexedDB backup copy, restored automatically), browser asked to protect the app's storage, look-up caches can no longer fill storage and block list saving (old caches removed, smaller cache, auto-cleared if full)
+- [x] Settings shows what's saved on the device and whether storage is protected
+
 ## Next
 - [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
 - [ ] Later: Wikipedia cross-language links for names of people/places (e.g. Luke → Λουκάς, لوقا)
@@ -44,7 +50,7 @@
 - [x] Published at https://blaqkfyre.github.io/bridging-terms/
 - [ ] Live-test v1.2 on Android, iPhone and PC after pushing
 - [ ] Offline mode (optional): cache the app shell in sw.js so the app opens with no signal
-- [ ] Sync lists via the GitHub repo (instead of manual Export / Import)
+- [ ] Optional online sync / sign-in so lists follow you between phone and PC (instead of Export / Import)
 - [ ] Reorder words in a list / drag boxes
 - [ ] Notes field on saved words
 - [ ] Respelling refinements per language (feedback from real use)
