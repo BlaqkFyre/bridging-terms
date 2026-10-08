@@ -181,6 +181,8 @@ ol.defs li{margin:2px 0}
 .boxes.details .dword{font-size:1.35rem}
 .boxes.simple .dword{word-break:normal;overflow-wrap:anywhere}
 .boxes.simple.n3 .dword{font-size:1.1rem} .boxes.simple.n4 .dword{font-size:clamp(.9rem,3.9vw,1.15rem)}
+.script.translit{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-weight:700;font-size:1.55rem}
+.term .orig{font-size:1.15rem}
 .orig{font-family:"Noto Serif","SBL Hebrew","Ezra SIL","Gentium Plus","Times New Roman",serif;font-size:1.05rem;unicode-bidi:isolate}
 .unlock svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2}
 /* bottom nav */
@@ -232,7 +234,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -995,12 +997,17 @@ function termHTML(res, c, t, i){
   const rs = respell(tr, c);
   const ipa = c === 'hbo' ? (t._tiberian || '') : (t._ipa || '');
   const needsTr = !lang.latin;
-  const sayParts = [];
-  if (tr) sayParts.push(`${esc(tr)}${t._trXlit ? ' <span class="tag xl" title="Transliterated using Wiktionary\'s transliteration rules">Wiktionary rules</span>' : ''}`);
-  if (rs) sayParts.push(`<b>${esc(rs)}</b> <span class="tag auto" title="Machine-generated easy-read respelling">auto</span>`);
+  const xlTag = t._trXlit ? ' <span class="tag xl" title="Transliterated using Wiktionary\'s transliteration rules">Wiktionary rules</span>' : '';
+  const rsHTML = rs ? `<b>${esc(rs)}</b> <span class="tag auto" title="Machine-generated easy-read respelling">auto</span>` : '';
+  // Words in other scripts: the transliteration is the big line, the original script + respelling underneath
+  const translitFirst = !!tr && isNonLatin(t.term);
+  const big = translitFirst ? `<span class="script translit">${esc(tr)}</span>` : `<span class="script"${langAttr(c)}>${esc(t.term)}</span>`;
+  const sayParts = translitFirst
+    ? [`<span class="orig"${langAttr(c)}>${esc(t.term)}</span>${xlTag}`, rsHTML]
+    : [tr && esc(tr) + xlTag, rsHTML];
   return `<div class="term"><div class="main">
-      <span class="script"${langAttr(c)}>${esc(t.term)}</span>
-      <div class="say">${sayParts.join(' · ') || (needsTr ? '<span class="muted small">No transliteration in source</span>' : '')}</div>
+      ${big}
+      <div class="say">${sayParts.filter(Boolean).join(' · ') || (needsTr ? '<span class="muted small">No transliteration in source</span>' : '')}</div>
       ${ipa ? `<div class="small muted">${c==='hbo'?'Biblical Hebrew IPA':'IPA'}: ${esc(ipa)}</div>` : (i===0 && t._done && lang.latin && c!=='en' ? '<div class="small muted">No pronunciation listed in source</div>' : '')}
       <div class="gloss">${[t.gloss && 'sense: ' + t.gloss, t.gender, t.qual, t.variety && (VARIETY[t.variety]||t.variety)].filter(Boolean).map(esc).join(' · ')}</div>
     </div><button class="savebtn" data-save-c="${c}" data-i="${i}" aria-label="Save ${esc(t.term)}">☆ Save</button></div>`;
@@ -1008,7 +1015,8 @@ function termHTML(res, c, t, i){
 function langCard(res, c, open){
   const terms = cardTerms(res, c);
   const name = langName(c);
-  const head = terms[0] ? `<span class="sumtxt">${esc(name)} — <span${langAttr(c)}>${esc(terms[0].term)}</span></span>` : `<span class="sumtxt">${esc(name)}</span>`;
+  const t0 = terms[0], t0tr = t0 ? (t0.tr || t0._tr || '') : '';
+  const head = t0 ? `<span class="sumtxt">${esc(name)} — ${t0tr && isNonLatin(t0.term) ? esc(t0tr) : `<span${langAttr(c)}>${esc(t0.term)}</span>`}</span>` : `<span class="sumtxt">${esc(name)}</span>`;
   let body;
   if (!terms.length) body = `<p class="muted">Neither Wiktionary nor Wikidata lists a ${esc(name)} form of “${esc(res.title)}”. Nothing has been guessed.</p>`;
   else body = (c==='hbo' && terms[0].viaHe ? `<div class="info small">Wiktionary doesn’t list Biblical Hebrew separately. Showing the Hebrew word(s), with the Biblical Hebrew pronunciation where the word’s entry gives one.</div>` : '')

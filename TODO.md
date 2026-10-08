@@ -42,6 +42,9 @@
 - [x] Safer saving on phones: lists saved to two places on the device (localStorage + IndexedDB backup copy, restored automatically), browser asked to protect the app's storage, look-up caches can no longer fill storage and block list saving (old caches removed, smaller cache, auto-cleared if full)
 - [x] Settings shows what's saved on the device and whether storage is protected
 
+## Done (v1.6.0, 8 Oct 2026)
+- [x] Search results: for words in other scripts the large word is now the transliteration (e.g. klaíō), with the original script and easy-read respelling underneath (κλαίω · KLEYE-oh); card headings use the transliteration too
+
 ## Next
 - [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
 - [ ] Later: Wikipedia cross-language links for names of people/places (e.g. Luke → Λουκάς, لوقا)
