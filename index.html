@@ -286,7 +286,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -1200,6 +1200,7 @@ function renderResults(res){
     <div class="cards">${cmp.map(c => langCard(res, c)).join('')}</div>
     <p class="credit">Sources: ${res.url ? `<a href="${esc(res.url)}">Wiktionary “${esc(res.title)}”</a> (CC BY-SA 4.0)` : 'Wiktionary (no entry)'}${alt.length ? ' · <a href="https://www.datamuse.com/api/">Datamuse</a> (WordNet)' : ''}${res.wd ? ` · <a href="${esc(res.wd.url)}">Wikidata</a> (CC0)` : ''}${res.nameInfo && res.nameInfo.url ? ` · <a href="${esc(res.nameInfo.url)}">Wikipedia</a> (CC BY-SA 4.0)` : ''}${res.nameInfo && res.nameInfo.bible ? ` · Hitchcock’s Bible Names (public domain, via <a href="https://github.com/BradyStephenson/bible-data">BibleData</a>, CC BY 4.0)` : ''}. Respellings marked <span class="tag auto">auto</span> are machine-generated from the transliteration.</p>`;
   r.querySelectorAll('[data-name-search]').forEach(b => b.onclick = () => { window.scrollTo(0,0); doSearch(b.dataset.nameSearch); });
+  r.querySelectorAll('[data-popnames]').forEach(b => b.onclick = () => popularNamesSheet(res));
   r.querySelector('[data-save="meaning"]').onclick = () => saveSheet(meaningItem, () => renderResults(res));
   r.querySelectorAll('[data-save-c]').forEach(b => b.onclick = () => {
     const t = cardTerms(res, b.dataset.saveC)[+b.dataset.i];
@@ -1236,6 +1237,26 @@ function nameBlockHTML(ni, level){
   }
   return parts.join('');
 }
+// Links to popular baby-name websites (they give simple meanings such as "fairy queen").
+// They can't be shown inside the app (they block being embedded), so each opens in a browser window over the app.
+function popularNamesSheet(res){
+  const ni = res.nameInfo || {};
+  const names = [ni.name || res.title]; let r = ni; while (r && r.root){ names.push(r.root); r = r.rootInfo; }
+  const kind = (ni.kind || (res.meanings[0] && res.meanings[0].defs[0]) || '').toLowerCase();
+  const genders = /female/.test(kind) ? ['girl'] : /\bmale/.test(kind) ? ['boy'] : ['girl','boy'];
+  const SITES = [
+    {name:'Behind the Name', note:'careful, well-researched origins', url: n => `https://www.behindthename.com/name/${encodeURIComponent(n.toLowerCase())}`},
+    {name:'The Bump', note:'short popular meaning', url: n => `https://www.thebump.com/b/${encodeURIComponent(n.toLowerCase())}-baby-name`},
+    ...genders.map(g => ({name:`Nameberry${genders.length > 1 ? ' (' + g + ')' : ''}`, note:'meaning, origin and popularity', url: n => `https://nameberry.com/b/${g}-baby-name-${encodeURIComponent(n.toLowerCase())}`})),
+  ];
+  const shown = names.slice(0, 2);   // the name and its first root name (e.g. Tania and Tatiana)
+  openSheet(`<h2 id="sheetTitle">Name websites</h2>
+    <p class="small muted" style="margin:0 0 4px">Quick, popular meanings. These sites aren’t dictionary sources and sometimes disagree, so compare them with the meaning above. Each opens over the app; close it to come back.</p>
+    <p class="small muted" style="margin:0 0 8px"><b>Behind the Name</b>: careful origins · <b>The Bump</b>: short popular meaning · <b>Nameberry</b>: meaning, origin and popularity</p>
+    ${shown.map((n, i) => `<div class="pos" style="margin-top:10px">${esc(n)}${i ? ' <span class="small muted" style="font-weight:400">(root name)</span>' : ''}</div>
+      <div class="btns" style="margin:6px 0">${SITES.map(st => `<a class="btn" data-external href="${esc(st.url(n))}" target="_blank" rel="noopener" style="text-decoration:none">${esc(st.name)} ↗</a>`).join('')}</div>`).join('')}
+    <div class="btns"><button class="btn primary" data-x>Close</button></div>`, sh => { sh.querySelector('[data-x]').onclick = closeSheet; });
+}
 function nameCardHTML(res){
   const n = res.name, ni = res.nameInfo;
   const title = (ni && ni.name) || (n && n.title) || res.title;
@@ -1255,6 +1276,7 @@ function nameCardHTML(res){
     ${ni ? nameBlockHTML(ni, 0) : ''}
     ${bibleHTML}
     ${relHTML}
+    <button type="button" class="btn" data-popnames style="width:100%;margin:6px 0 4px">Popular meanings on name websites…</button>
     ${n ? `${n.meanings.map(m => `<ol class="defs">${m.defs.map(d=>`<li>${esc(d)}</li>`).join('')}</ol>`).join('')}
       ${n.etymology.length && !(ni && ni.wiktEty) ? `<div class="pos small">Name origin</div>${n.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('')}` : ''}
       ${ni && ni.wiktUrl ? '' : `<p class="small muted" style="margin:0"><a href="${esc(n.url)}" class="srclink"><span class="tag">Wiktionary</span> Name entry</a></p>`}` : ''}

@@ -62,6 +62,9 @@
 - [x] Name meaning card shows the root chain (Tania → Tatiana → Tatius, tap to search), related & derived names (tap to search), and Bible-name meanings from Hitchcock's Bible Names Dictionary (2,619 names, data/bible-names.json, stored in the repo)
 - [x] Easy meanings pulled from the quoted glosses in Wiktionary / Wikipedia; Wiktionary preferred
 
+## Done (v1.11.0, 10 Oct 2026)
+- [x] Name meaning card has a "Popular meanings on name websites…" button: a pop-up with Behind the Name, The Bump and Nameberry links for the name and its root names (they open over the app; these sites block being shown inside it)
+
 ## Next
 - [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
 - [ ] Later (optional): Behind the Name name-synonym file (CC BY-SA, needs a free account to download) for more variant ↔ root links
