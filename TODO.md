@@ -53,6 +53,10 @@
 - [x] Smarter name meanings: if a name comes from another name (Tania → diminutive of Tatiana → derivative of Tatius), the root name's meaning is looked up and shown too (Wiktionary name entries + Wikipedia, up to 2 steps)
 - [x] Links open an in-app pop-up preview (Wikipedia summary, Wiktionary meaning, Wikidata description) with an "Open on …" button; on computers hovering a link shows a quick preview
 
+## Done (v1.9.0, 10 Oct 2026)
+- [x] Two new custom styles: Periscope (navy, light blue, dark blue-grey) and ArcticSpring (icy blue & spring green)
+- [x] Theme split into two header buttons: Mode (Auto / Light / Dark) and Custom styles (Bubblegum / Periscope / ArcticSpring / Off); Settings has both groups
+
 ## Next
 - [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
 - [ ] Later: biblical name meanings (e.g. Hitchcock's Bible Names / BDB via Bolls.life) for names Wikipedia doesn't explain

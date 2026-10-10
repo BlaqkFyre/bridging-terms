@@ -47,6 +47,31 @@
 :root[data-theme="bubblegum"] .brand b{background:linear-gradient(90deg,#e91e63,#8e44ff);-webkit-background-clip:text;background-clip:text;color:transparent}
 :root[data-theme="bubblegum"] .gobtn,:root[data-theme="bubblegum"] .btn.primary{background:linear-gradient(135deg,#d81b60,#8e24aa);border-color:transparent}
 :root[data-theme="bubblegum"] details.pill[open]{box-shadow:0 4px 16px rgba(194,24,91,.10)}
+/* Periscope: navy, light blue, dark blue-grey */
+:root[data-theme="periscope"]{
+  --bg:#0f1b2d; --card:#1a2a40; --ink:#e6eef8; --muted:#9fb3c8; --line:#2f4560;
+  --teal:#6cb8ff; --teal-ink:#0b1626; --tealbg:#183453; --amber-bg:#3a3220; --amber:#f2c879;
+  --wd:#c3b6ff; --wdbg:#2a2950; --page:linear-gradient(180deg,#0f1b2d 0%,#13243b 55%,#162a44 100%);
+  --danger:#ff9a8f; --shadow:0 8px 28px rgba(0,0,0,.45); color-scheme:dark;
+}
+:root[data-theme="periscope"] nav.tabs{background:#13233a;border-top-color:#2f4560}
+:root[data-theme="periscope"] details.pill[open]{box-shadow:0 0 0 1px rgba(108,184,255,.15),0 6px 18px rgba(0,0,0,.35)}
+:root[data-theme="periscope"] .sentence{background:#14253b}
+/* ArcticSpring: icy white and pale blue with spring green */
+:root[data-theme="arcticspring"]{
+  --bg:#f2f8fb; --card:#ffffff; --ink:#14303a; --muted:#4d6873; --line:#cfe3ea;
+  --teal:#117a55; --teal-ink:#ffffff; --tealbg:#dcf3e8; --amber-bg:#fff3c4; --amber:#7a5200;
+  --wd:#2a62a8; --wdbg:#e3eefb; --page:linear-gradient(170deg,#eaf5fb 0%,#f4fafc 50%,#eef9f1 100%);
+  --danger:#b3261e; --shadow:0 8px 24px rgba(20,48,58,.10); color-scheme:light;
+}
+:root[data-theme="arcticspring"] .brand b{background:linear-gradient(90deg,#2a8fc4,#18a06a);-webkit-background-clip:text;background-clip:text;color:transparent}
+:root[data-theme="arcticspring"] .gobtn,:root[data-theme="arcticspring"] .btn.primary{background:linear-gradient(135deg,#1c7fb0,#117a55);border-color:transparent}
+:root[data-theme="arcticspring"] .chip.on{background:#e3eefb;border-color:#2a62a8}
+:root[data-theme="arcticspring"] details.pill[open]{border-color:#3a9ccf}
+:root[data-theme="arcticspring"] .box.lock{border-color:#3a9ccf}
+.hbtns{display:flex;gap:8px}
+.swatch{display:inline-flex;gap:3px;vertical-align:middle;margin-right:8px}
+.swatch i{width:14px;height:14px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.15)}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
 body{background:var(--page);background-attachment:fixed;min-height:100vh}
@@ -166,6 +191,7 @@ ol.defs li{margin:2px 0}
 .sentence .gap{color:var(--muted);font-weight:400}
 .seg.two{grid-template-columns:1fr 1fr}
 .seg.four{grid-template-columns:repeat(auto-fit,minmax(80px,1fr))}
+.seg.styles{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
 .boxes{display:grid;gap:8px;margin:10px 0;direction:ltr}
 .boxes.simple.n2{grid-template-columns:repeat(2,1fr)} .boxes.simple.n3{grid-template-columns:repeat(3,1fr)} .boxes.simple.n4{grid-template-columns:repeat(4,1fr)}
 .boxes.details{grid-template-columns:1fr 1fr}
@@ -225,9 +251,14 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 <div class="wrap">
   <header class="top">
     <h1 class="brand">Bridging <b>Terms</b></h1>
-    <button class="iconbtn" id="themeBtn" type="button" aria-label="Theme: Auto. Tap to change">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none" style="fill:var(--muted)"/></svg>
-    </button>
+    <div class="hbtns">
+      <button class="iconbtn" id="themeBtn" type="button" aria-label="Mode: Auto. Tap to change" title="Mode: Auto / Light / Dark">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none" style="fill:var(--muted)"/></svg>
+      </button>
+      <button class="iconbtn" id="styleBtn" type="button" aria-label="Custom styles" title="Custom styles">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4-4-7.4-9-7.4z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor" style="fill:var(--muted)"/><circle cx="10.5" cy="7.5" r="1.2" fill="currentColor" style="fill:var(--muted)"/><circle cx="15" cy="7.5" r="1.2" fill="currentColor" style="fill:var(--muted)"/></svg>
+      </button>
+    </div>
   </header>
   <main id="view" tabindex="-1"></main>
 </div>
@@ -247,7 +278,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -345,23 +376,46 @@ const ICON = {
   chev:'<span class="chev" aria-hidden="true">▾</span>',
 };
 
-/* ---------- Theme ---------- */
-const THEMES = ['auto','light','dark','bubblegum'];
+/* ---------- Theme: a mode (Auto / Light / Dark) plus an optional custom style ---------- */
+const MODES = ['auto','light','dark'];
+const STYLES = [
+  {id:'bubblegum', name:'Bubblegum', note:'bright pink & purple', sw:['#fff0f7','#c2185b','#8e24aa'], bar:'#ffe0ef'},
+  {id:'periscope', name:'Periscope', note:'navy, light blue, blue-grey', sw:['#0f1b2d','#1a2a40','#6cb8ff'], bar:'#0f1b2d'},
+  {id:'arcticspring', name:'ArcticSpring', note:'icy blue & spring green', sw:['#eaf5fb','#3a9ccf','#117a55'], bar:'#eaf5fb'},
+];
+// older versions kept one "theme" value
+if (!settings.mode){ const t = settings.theme || 'auto'; settings.mode = MODES.includes(t) ? t : 'auto'; settings.style = STYLES.some(x => x.id === t) ? t : ''; }
+const styleOf = id => STYLES.find(x => x.id === id);
 function applyTheme(){
-  const t = settings.theme;
+  const st = styleOf(settings.style), m = settings.mode;
+  const t = st ? st.id : m;
   if (t === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
-  const dark = t==='dark' || (t==='auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-  $('#themeColor').setAttribute('content', t==='bubblegum' ? '#ffe0ef' : dark ? '#1e2124' : '#f6f7f8');
-  $('#themeBtn').setAttribute('aria-label', `Theme: ${t[0].toUpperCase()+t.slice(1)}. Tap to change`);
-  $('#themeBtn').title = 'Theme: ' + t;
+  const dark = m === 'dark' || (m === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  $('#themeColor').setAttribute('content', st ? st.bar : dark ? '#1e2124' : '#f6f7f8');
+  const ml = m[0].toUpperCase() + m.slice(1);
+  $('#themeBtn').setAttribute('aria-label', `Mode: ${ml}${st ? ' (style ' + st.name + ' is on)' : ''}. Tap to change`);
+  $('#themeBtn').title = 'Mode: ' + ml;
+  $('#styleBtn').setAttribute('aria-label', `Custom style: ${st ? st.name : 'none'}. Tap to choose`);
+  $('#styleBtn').title = 'Custom style: ' + (st ? st.name : 'none');
+  settings.theme = t;
 }
+function setMode(m){ settings.mode = m; settings.style = ''; applyTheme(); saveSettings(); if (route().name === 'settings') render(); }
+function setStyle(id){ settings.style = id; applyTheme(); saveSettings(); if (route().name === 'settings') render(); }
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 $('#themeBtn').addEventListener('click', () => {
-  const order = THEMES;
-  settings.theme = order[(order.indexOf(settings.theme)+1) % order.length];
-  saveSettings(); applyTheme(); toast('Theme: ' + settings.theme);
-  if (route().name === 'settings') render();
+  // with a custom style on, the first tap returns to the current mode; after that it cycles Auto → Light → Dark
+  const next = settings.style ? settings.mode : MODES[(MODES.indexOf(settings.mode) + 1) % MODES.length];
+  setMode(next); toast('Mode: ' + next[0].toUpperCase() + next.slice(1));
+});
+$('#styleBtn').addEventListener('click', () => {
+  openSheet(`<h2 id="sheetTitle">Custom styles</h2><p class="small muted" style="margin:0 0 6px">Pick a style, or turn styles off to use Auto / Light / Dark.</p>
+    ${STYLES.map(x => `<label class="check"><span><span class="swatch">${x.sw.map(c => `<i style="background:${c}"></i>`).join('')}</span><b>${x.name}</b> <span class="small muted">${x.note}</span></span><input type="radio" name="st" value="${x.id}" ${settings.style===x.id?'checked':''}></label>`).join('')}
+    <label class="check"><span>Off — use ${esc(settings.mode[0].toUpperCase()+settings.mode.slice(1))} mode</span><input type="radio" name="st" value="" ${!settings.style?'checked':''}></label>
+    <div class="btns"><button class="btn primary" data-ok>Done</button></div>`, sh => {
+    sh.querySelectorAll('input[name=st]').forEach(r => r.onchange = () => setStyle(r.value));   // live preview
+    sh.querySelector('[data-ok]').onclick = closeSheet;
+  });
 });
 
 /* ---------- Wiktionary data layer ---------- */
@@ -1453,7 +1507,10 @@ function renderSettings(){
   v.innerHTML = `<h2 class="page">Settings</h2>
     <div class="settings-sec">
       <h3>Appearance</h3>
-      <div class="seg four" role="group" aria-label="Theme">${THEMES.map(t=>`<button data-theme-set="${t}" aria-pressed="${settings.theme===t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>
+      <p class="small muted" style="margin:0">Mode</p>
+      <div class="seg" role="group" aria-label="Mode">${MODES.map(m=>`<button data-mode-set="${m}" aria-pressed="${!settings.style && settings.mode===m}">${m[0].toUpperCase()+m.slice(1)}</button>`).join('')}</div>
+      <p class="small muted" style="margin:8px 0 0">Custom style</p>
+      <div class="seg styles" role="group" aria-label="Custom style">${[{id:'',name:'Off'}].concat(STYLES).map(x=>`<button data-style-set="${x.id}" aria-pressed="${settings.style===x.id}">${x.name}</button>`).join('')}</div>
       <h3>Languages</h3>
       <div class="btns"><button class="btn choice" id="sDef">Default language<small>${esc(langName(settings.defaultLang))}</small></button>
         <button class="btn choice" id="sCmp">Compare languages<small>${esc(settings.compare.map(langName).join(', ') || 'none')}</small></button></div>
@@ -1478,7 +1535,8 @@ function renderSettings(){
       + (persisted ? '✓ Protected: the browser won’t clear this app’s data to free up space.' : 'Standard storage: kept after closing or restarting. The browser may only clear it if the phone runs very low on space or you clear site data.')
       + `<br>Backup copy: ${b ? '✓ in place' : 'not available in this browser'}${est && est.usage ? ` · using ${est.usage < 1048576 ? Math.max(1, Math.round(est.usage/1024)) + ' KB' : (est.usage/1048576).toFixed(1) + ' MB'}` : ''}`;
   })();
-  v.querySelectorAll('[data-theme-set]').forEach(b => b.onclick = () => { settings.theme = b.dataset.themeSet; saveSettings(); applyTheme(); render(); });
+  v.querySelectorAll('[data-mode-set]').forEach(b => b.onclick = () => setMode(b.dataset.modeSet));
+  v.querySelectorAll('[data-style-set]').forEach(b => b.onclick = () => setStyle(b.dataset.styleSet));
   $('#sDef').onclick = pickDefaultLang; $('#sCmp').onclick = pickCompareLangs;
   $('#sEx').onclick = exportData; $('#sIm').onclick = () => $('#importFile').click();
   $('#sClr').onclick = () => confirmSheet('Clear search history?', 'Recent searches and saved look-ups are removed from this device. Your lists are not affected.', 'Clear', () => { recent = []; store.set('recent', []); store.set(CACHE_KEY, {}); store.set(TERMS_KEY, {}); current = null; render(); toast('Search history cleared'); });
