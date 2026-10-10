@@ -65,6 +65,11 @@
 ## Done (v1.11.0, 10 Oct 2026)
 - [x] Name meaning card has a "Popular meanings on name websites…" button: a pop-up with Behind the Name, The Bump and Nameberry links for the name and its root names (they open over the app; these sites block being shown inside it)
 
+## Done (v1.12.0, 10 Oct 2026)
+- [x] Name look-ups also search two out-of-copyright name books on the Internet Archive: Yonge, History of Christian Names (1884, ~8,000 first names, e.g. Luke "light", Constance "firm") and Bardsley, Dictionary of English and Welsh Surnames (1901, ~13,000 surnames, e.g. Marley "from the place Marley (Marley Hill, near Gateshead)"); each book is downloaded once, indexed and kept on the device, so later look-ups are instant and offline
+- [x] Every word/name looked up is saved on the device (no 120-word limit) and reopens instantly; new "All search history…" list with filter
+- [x] Collapsed language cards show the transliteration in bold (smaller version of the expanded style)
+
 ## Next
 - [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
 - [ ] Later (optional): Behind the Name name-synonym file (CC BY-SA, needs a free account to download) for more variant ↔ root links

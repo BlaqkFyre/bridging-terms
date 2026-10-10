@@ -12,6 +12,8 @@ Second sources: [Wikidata](https://www.wikidata.org/) (CC0) for names and labels
 
 Bible-name meanings: Hitchcock's Bible Names Dictionary (1869, public domain), via [BibleData](https://github.com/BradyStephenson/bible-data) by Brady Stephenson (CC BY 4.0), stored in `data/bible-names.json`.
 
+Old name books (public domain, read from the Internet Archive and cached on the device): C. M. Yonge, *History of Christian Names* (1884) and C. W. Bardsley, *A Dictionary of English and Welsh Surnames* (1901).
+
 Live app: https://blaqkfyre.github.io/bridging-terms/
 
 ## Files

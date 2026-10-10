@@ -124,6 +124,8 @@ details.pill,.pill{border:1px solid var(--line);border-radius:var(--r-pill);back
 details.pill[open]{border:1.5px solid var(--teal)}
 .pill>summary{list-style:none;cursor:pointer;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:600}
 .pill>summary::-webkit-details-marker{display:none}
+.lname{font-weight:500}
+.tlbig{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-weight:800;font-size:1.12rem;letter-spacing:.1px}
 .sumwrap{display:flex;flex-direction:column;min-width:0;gap:2px}
 .sumline{font-weight:400;font-size:.86rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .sumline b{color:var(--ink);font-weight:600}
@@ -286,7 +288,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.11.0';
+const APP_VERSION = '1.12.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -317,7 +319,7 @@ const LANGS_AZ = [...LANGS].sort((a, b) => a.name.localeCompare(b.name));
 
 /* ---------- Storage (guarded) ---------- */
 // Look-up caches can always be thrown away; lists and settings never are.
-const CACHE_KEYS = ['cache5','terms2','xlit'];
+const CACHE_KEYS = ['cache6','terms2','xlit'];
 const store = {
   get(k, def){ try{ const v = localStorage.getItem('bt.'+k); return v ? JSON.parse(v) : def; }catch(e){ return def; } },
   set(k, v){
@@ -335,7 +337,7 @@ const store = {
   }
 };
 // Remove caches from older versions (they could fill the browser's storage and block list saving)
-['cache','terms','cache2','cache3','cache4'].forEach(k => { try{ localStorage.removeItem('bt.'+k); }catch(e){} });
+['cache','terms','cache2','cache3','cache4','cache5'].forEach(k => { try{ localStorage.removeItem('bt.'+k); }catch(e){} });
 
 // Second copy of the lists in IndexedDB (more durable than localStorage, survives a full localStorage)
 const backup = {
@@ -348,6 +350,7 @@ const backup = {
     return this.p;
   },
   async put(k, v){ try{ const db = await this.open(); await new Promise((res, rej) => { const tx = db.transaction('kv','readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); return true; }catch(e){ return false; } },
+  async clearPrefix(prefix){ try{ const db = await this.open(); await new Promise((res, rej) => { const tx = db.transaction('kv','readwrite'); const st = tx.objectStore('kv'); const rq = st.openCursor(); rq.onsuccess = () => { const c = rq.result; if (c){ if (String(c.key).startsWith(prefix)) c.delete(); c.continue(); } }; tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }catch(e){} },
   async get(k){ try{ const db = await this.open(); return await new Promise((res, rej) => { const r = db.transaction('kv').objectStore('kv').get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }catch(e){ return undefined; } }
 };
 // Ask the browser not to clear this app's storage when the phone runs low on space
@@ -585,7 +588,7 @@ function titleForm(word, code){
   return w;
 }
 
-const CACHE_KEY = 'cache5', TERMS_KEY = 'terms2';   // v1.7: cache3 adds name meanings   // v1.2: old caches dropped (they held broken phone results)
+const CACHE_KEY = 'cache6', TERMS_KEY = 'terms2';   // v1.7: cache3 adds name meanings   // v1.2: old caches dropped (they held broken phone results)
 const withTimeout = (p, ms=9000) => Promise.race([p, new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 const WD_LANG = {cmn:'zh', hbo:'he'};
 
@@ -711,17 +714,27 @@ async function wikipediaName(word){
   if (rm && rm[1].toLowerCase() !== word.toLowerCase()) info.root = rm[1];
   return info;
 }
-async function nameMeaning(word, depth = 0, seen = new Set()){
+async function nameMeaning(word, depth = 0, seen = new Set(), typedAsName = false){
   if (!/^[\p{L}'’-]+$/u.test(word)) return null;
   const name = word[0].toUpperCase() + word.slice(1);
   seen.add(name.toLowerCase());
   const [wk, wp] = await Promise.all([wiktNameSense(name).catch(() => null), wikipediaName(name).catch(() => null)]);
-  if (!wp && !(wk && wk.text)){ const bm = await bibleMeaning(name); return bm ? {name, kind:'Bible name', meaning:[], intro:'', title:'', url:'', bible: bm, related: []} : null; }
+  // old books: first names (Yonge) always; the big surname dictionary (Bardsley) only when this looks like a name
+  const yg = await bookEntry('yonge', name);
+  const nameLike = typedAsName || depth > 0 || (wk && wk.text) || wp;
+  const bd = yg || !nameLike ? null : await bookEntry('bardsley', name);
+  if (!wp && !(wk && wk.text)){
+    const bm = await bibleMeaning(name);
+    if (!bm && !yg && !bd) return null;
+    return {name, kind: yg ? (yg.e.g === 'm' ? 'male given name' : 'female given name') : bm ? 'Bible name' : 'surname', meaning:[], intro:'', title:'', url:'', bible: bm, related: [], yonge: yg, bardsley: bd, origin: yongeOrigin(yg && yg.e)};
+  }
   const info = Object.assign({name, kind: '', wdUrl: '', title: '', url: '', meaning: [], intro: ''}, wp || {});
   info.name = name;
   if (wk && wk.text){ info.wikt = wk.text; info.wiktUrl = wk.url; info.wiktEty = (wk.etymology || [])[0] || ''; if (!info.kind) info.kind = /female/i.test(wk.text) ? 'female given name' : /male/i.test(wk.text) ? 'male given name' : 'name'; }
   if (wk){ info.related = wk.related || []; info.wiktGloss = wk.gloss || ''; info.origin = wk.origin || null; }
   info.bible = await bibleMeaning(name);
+  info.yonge = yg; info.bardsley = bd;
+  if (!info.origin && yg) info.origin = yongeOrigin(yg.e);
   const root = (wk && wk.root) || (wp && wp.root) || '';
   if (root && depth < 2 && !seen.has(root.toLowerCase())){
     info.root = root; info.relation = (wk && wk.root === root && wk.relation) || 'form';
@@ -740,21 +753,100 @@ function bibleMeaning(name){
     return m || '';
   });
 }
+// Old name books (public domain), read straight from the Internet Archive the first time they are needed,
+// turned into a small index and kept on the device (IndexedDB) so later look-ups are instant and work offline.
+//  • Charlotte M. Yonge, History of Christian Names (1884) — glossary of ~8,000 first names with meanings
+//  • Charles W. Bardsley, A Dictionary of English and Welsh Surnames (1901) — ~13,000 surnames with origins
+const BOOKS = {
+  yonge: {key:'book-yonge-v1', ids:['cu31924031230182'], title:'Yonge, History of Christian Names (1884)', short:'Yonge 1884', parse: parseYonge},
+  bardsley: {key:'book-bardsley-v1', ids:['bwb_P9-EIE-107','adictionaryengl00bardgoog'], title:'Bardsley, Dictionary of English and Welsh Surnames (1901)', short:'Bardsley 1901', parse: parseBardsley},
+};
+const bookP = {};
+function loadBook(name){
+  if (bookP[name]) return bookP[name];
+  const bk = BOOKS[name];
+  bookP[name] = (async () => {
+    const saved = await backup.get(bk.key);
+    if (saved && saved.map) return saved;
+    if (navigator.onLine === false) throw new Error('offline');
+    for (const id of bk.ids){
+      try{
+        const r = await fetch(`https://archive.org/download/${id}/${id}_djvu.txt`);
+        if (!r.ok) continue;
+        const map = bk.parse(await r.text());
+        if (Object.keys(map).length < 500) continue;
+        const out = {id, map, at: Date.now()};
+        backup.put(bk.key, out);
+        return out;
+      }catch(e){}
+    }
+    throw new Error('book unavailable');
+  })().catch(e => { bookP[name] = null; throw e; });
+  return bookP[name];
+}
+async function bookEntry(name, word, waitMs = 12000){
+  try{ const b = await withTimeout(loadBook(name), waitMs); const e = b.map[word.toLowerCase()]; return e ? {e, id: b.id} : null; }
+  catch(e){ return null; }
+}
+function parseYonge(t){
+  const g = t.indexOf('Aaron,'); let e = t.indexOf('Every form of every name', g); if (g < 0) return {}; if (e < 0) e = Math.min(t.length, g + 450000);
+  const gl = t.slice(g, e).replace(/\s+/g,' ').replace(/\s*\*\s*/g,' ');
+  const re = /([A-ZÀ-Þ][A-Za-zÀ-ÿ'’-]{1,25}),\s*(m|f|\/|in|to|7n|r\/i)?\s*[.:,]?\s*\/?\.?\s*,?\s*((?:[^\s,0-9]{1,12}[.,]\s*){1,5})([^,0-9]{2,80}?),\s*(?:\(\?\),\s*)?(\d{1,3})\b/g;
+  const map = {}; let m;
+  while ((m = re.exec(gl))){
+    const k = m[1].toLowerCase(); if (map[k]) continue;
+    const abbr = m[3].trim().split(/\s+/).map(x => x.replace(/[.,]$/,''));
+    const meaning = m[4].trim().replace(/^[.,\s]+/,'').replace(/gi'/g,'gr');
+    if (!meaning || meaning.length < 2) continue;
+    map[k] = {g: /^(m|in|to|7n|r\/i)$/.test(m[2] || '') ? 'm' : 'f', used: abbr.slice(0,-1).join(' '), from: abbr[abbr.length-1], m: meaning, p: +m[5]};
+  }
+  return map;
+}
+function parseBardsley(b){
+  const map = {}; let m;
+  const re = /\n([A-Z][a-z'’]+(?:,\s*[A-Z][a-z'’]+){0,4})\.\s*[—–-]{1,2}\s*([\s\S]{20,700}?)(?=\n\s*\n|\n[A-Z][a-z]+(?:,\s*[A-Z][a-z]+)*\.\s*[—–-])/g;
+  while ((m = re.exec(b))){
+    let txt = m[2].replace(/\s+/g,' ').replace(/(\w)- (\w)/g,'$1$2').trim();
+    const cut = txt.search(/\.\s+(?:[‘'"]|[A-Z][a-z]+ (?:de|le|del|atte)\b|\d{4})/); if (cut > 30) txt = txt.slice(0, cut + 1);
+    if (txt.length > 260) txt = txt.slice(0, 257) + '…';
+    for (const nm of m[1].split(/,\s*/)){ const k = nm.toLowerCase(); if (!map[k]) map[k] = txt; }
+  }
+  return map;
+}
+const YONGE_LANG = {Heb:['Hebrew','HEB'],Lat:['Latin','LAT'],Gr:['Greek','GRK'],Or:['Greek','GRK'],Teu:['Germanic','GER'],Ten:['Germanic','GER'],Kelt:['Celtic','CEL'],Celt:['Celtic','CEL'],Phoen:['Phoenician','PHO'],Arab:['Arabic','ARA'],Aram:['Aramaic','ARC'],Pers:['Persian','PER'],Slav:['Slavonic','SLA'],Eng:['English','ENG'],Nor:['Norse','NOR'],Fr:['French','FRE'],Egypt:['Egyptian','EGY'],Sansk:['Sanskrit','SAN']};
+const yongeOrigin = y => y && YONGE_LANG[y.from] ? {lang: YONGE_LANG[y.from][0], code: YONGE_LANG[y.from][1]} : null;
+const archiveSearchUrl = (id, q) => `https://archive.org/details/${id}?q=${encodeURIComponent(q)}`;
+// Bardsley entries start "Local, 'of Marley' …", "Bapt. 'the son of Luke'", "Occup. 'the baker'", "Nick. …"
+function bardsleyShort(txt){
+  const t = txt.replace(/^\(1\)\s*/,'');
+  const kind = /^Local/i.test(t) ? 'place name' : /^Bapt/i.test(t) ? 'from a first name' : /^Occup/i.test(t) ? 'from a job' : /^(Nick|Offic)/i.test(t) ? 'nickname / title' : 'surname';
+  const q = ((t.match(/[‘'"]\s*([^’'"]{2,60})[’'"]/) || [])[1] || '').replace(/,$/,'').trim();
+  if (/^Local/i.test(t)){
+    const place = q.replace(/^(of|at( the)?|from)\s+/i,'');
+    const now = (t.match(/\bnow ([A-Z][^,.;]{2,40})/) || [])[1];
+    const near = (t.match(/\bnear ([A-Z][^,.;]{2,30})/) || [])[1];
+    const where = [now, near && 'near ' + near].filter(Boolean).join(', ');
+    return `from the place ${place || 'name'}${where ? ' (' + where + ')' : ''}`;
+  }
+  return q ? `${kind}: ${q}` : kind;
+}
+
 // The short, easy summary for the name card, e.g. "man from Lucania · GRK" or "diminutive of Tatiana (from Tatius) · RUS"
 function nameSummary(ni){
   if (!ni) return {text:'', code:''};
   const code = ni.origin ? ni.origin.code : '';
-  const gloss = ni.wiktGloss || ni.gloss || '';
-  if (gloss) return {text: gloss, code};
+  const gloss = ni.wiktGloss || (ni.yonge && ni.yonge.e.m) || ni.gloss || '';
+  if (gloss) return {text: gloss, code: code || (ni.yonge ? (yongeOrigin(ni.yonge.e) || {}).code || '' : '')};
   if (ni.root){
     const chain = []; let r = ni.rootInfo, rootGloss = '';
-    while (r){ if (!rootGloss) rootGloss = r.wiktGloss || r.gloss || ''; if (r.root) chain.push(r.root); r = r.rootInfo; }
+    while (r){ if (!rootGloss) rootGloss = r.wiktGloss || (r.yonge && r.yonge.e.m) || r.gloss || ''; if (r.root) chain.push(r.root); r = r.rootInfo; }
     if (!ni.rootInfo || !ni.rootInfo.root) { /* nothing deeper */ }
     const deeper = chain.length ? ` (from ${chain[chain.length - 1]})` : '';
     const rel = {short:'short for', 'shortened form':'short form', nickname:'nickname for'}[ni.relation] || ((ni.relation || 'form') + ' of');
     return {text: `${rel} ${ni.root}${rootGloss ? ` — “${rootGloss}”` : deeper}`, code: code || (ni.rootInfo && ni.rootInfo.origin ? ni.rootInfo.origin.code : '')};
   }
   if (ni.bible) return {text: ni.bible.split(';').slice(0, 2).join(';').trim(), code: code || 'HEB'};
+  if (ni.bardsley) return {text: bardsleyShort(ni.bardsley.e), code: code || 'ENG'};
   if (ni.origin) return {text: `from ${ni.origin.lang}`, code};
   return {text: ni.kind || '', code};
 }
@@ -762,7 +854,7 @@ function nameSummary(ni){
 function nameMeaningLine(ni){
   if (!ni) return '';
   const sm = nameSummary(ni);
-  if (sm.text && (ni.gloss || ni.wiktGloss || ni.root || ni.bible)) return sm.text + (sm.code ? ` (${sm.code})` : '');
+  if (sm.text && (ni.gloss || ni.wiktGloss || ni.root || ni.bible || ni.yonge || ni.bardsley)) return sm.text + (sm.code ? ` (${sm.code})` : '');
   if (ni.meaning && ni.meaning.length) return ni.meaning[0];
   if (ni.root && ni.rootInfo){ const r = nameMeaningLine(ni.rootInfo); return `${cap(ni.relation || 'form')} of ${ni.root}${r ? ': ' + r : ''}`; }
   return ni.wiktEty || '';
@@ -772,6 +864,8 @@ async function lookup(word, code){
   const key = code + '|' + word.trim().toLowerCase();
   const cache = store.get(CACHE_KEY, {});
   if (cache[key]) return Object.assign({cached:true}, cache[key]);
+  const saved = await backup.get('lk:' + CACHE_KEY + ':' + key);   // full history of look-ups (no size limit worth worrying about)
+  if (saved) return Object.assign({cached:true}, saved);
   const lang = L[code];
   const base = titleForm(word, code);
   const capd = base[0].toUpperCase() + base.slice(1);
@@ -780,7 +874,7 @@ async function lookup(word, code){
   // start the second sources in parallel; they never block or break the main lookup
   const dmP = code === 'en' ? datamuseDefs(base).catch(() => []) : Promise.resolve([]);
   const wdP = wikidataLookup(base, code).catch(() => null);
-  const nmP = /^[\p{L}'’-]+$/u.test(base) && (code === 'en' || /^[A-Za-zÀ-ÿ]/.test(base)) ? withTimeout(nameMeaning(capd), 25000).catch(() => null) : Promise.resolve(null);
+  const nmP = /^[\p{L}'’-]+$/u.test(base) && (code === 'en' || /^[A-Za-zÀ-ÿ]/.test(base)) ? withTimeout(nameMeaning(capd, 0, new Set(), typedCap), 25000).catch(() => null) : Promise.resolve(null);
   let page = null, sec = null, anyPage = null;
   for (const t of tries){
     const pg = await fetchPage(t);
@@ -848,6 +942,7 @@ async function lookup(word, code){
   const keys = Object.keys(cache);
   if (keys.length > CACHE_MAX) keys.sort((a,b)=>(cache[a].fetched||'').localeCompare(cache[b].fetched||'')).slice(0, keys.length-CACHE_MAX).forEach(k=>delete cache[k]);
   store.set(CACHE_KEY, cache);
+  backup.put('lk:' + CACHE_KEY + ':' + key, res);
   return res;
 }
 
@@ -1115,12 +1210,43 @@ function renderSearch(){
   v.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { settings.compare = settings.compare.filter(c => c !== b.dataset.rm); saveSettings(); renderSearch(); });
   if (current && !searching) renderResults(current); else if (!current) renderHome();
 }
+// History of every word/name looked up on this device
+async function addHistory(word, code, res){
+  const h = (await backup.get('history')) || [];
+  const ni = res.nameInfo; const sm = ni ? nameSummary(ni) : null;
+  const m0 = res.meanings && res.meanings[0];
+  const summary = sm && sm.text ? sm.text + (sm.code ? ' · ' + sm.code : '') : (m0 ? m0.defs[0] : ((res.alt || [])[0] || {}).def || '');
+  const k = code + '|' + word.toLowerCase();
+  const next = [{word: res.title || word, lang: code, k, summary: (summary || '').slice(0, 140), at: new Date().toISOString(), name: !!ni}, ...h.filter(x => x.k !== k)].slice(0, 5000);
+  await backup.put('history', next);
+}
+async function historySheet(){
+  const h = (await backup.get('history')) || [];
+  openSheet(`<h2 id="sheetTitle">Search history <span class="small muted" style="font-weight:400">${h.length} saved</span></h2>
+    <p class="small muted" style="margin:0 0 6px">Every word and name you look up is saved on this device, so it reopens instantly — even offline.</p>
+    <input class="field" id="hf" placeholder="Filter…" aria-label="Filter history">
+    <div id="hl"></div>
+    <div class="btns"><button class="btn primary" data-x>Close</button></div>`, sh => {
+    const draw = () => {
+      const q = sh.querySelector('#hf').value.trim().toLowerCase();
+      const rows = h.filter(x => !q || x.word.toLowerCase().includes(q) || (x.summary || '').toLowerCase().includes(q)).slice(0, 300);
+      sh.querySelector('#hl').innerHTML = rows.length ? rows.map(x => `<button type="button" class="check" style="width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;font:inherit;color:inherit" data-hw="${esc(x.word)}" data-hl="${esc(x.lang)}">
+        <span><b${langAttr(x.lang)}>${esc(x.word)}</b> <span class="small muted">${esc(langName(x.lang))}${x.name ? ' · name' : ''}</span><br><span class="small muted">${esc(x.summary || '')}</span></span><span class="small muted" style="flex:none">${esc(fmtDate(x.at))}</span></button>`).join('')
+        : '<p class="empty">Nothing yet.</p>';
+      sh.querySelectorAll('[data-hw]').forEach(b => b.onclick = () => { closeSheet(); if (b.dataset.hl !== settings.defaultLang){ settings.defaultLang = b.dataset.hl; saveSettings(); render(); } location.hash = 'search'; doSearch(b.dataset.hw); });
+    };
+    sh.querySelector('#hf').addEventListener('input', draw); draw();
+    sh.querySelector('[data-x]').onclick = closeSheet;
+  });
+}
 function renderHome(){
   const r = $('#results'); if (!r) return;
   r.innerHTML = `
-    ${recent.length ? `<p class="lbl">Recent searches</p><div class="chips">${recent.map(x => `<button class="chip" type="button" data-w="${esc(x.word)}" data-l="${x.lang}"${langAttr(x.lang)}>${esc(x.word)}</button>`).join('')}</div>` : `<p class="empty">Type a word and press Enter to see its meaning, history and how it's said in the languages you compare.</p>`}
+    ${recent.length ? `<p class="lbl">Recent searches</p><div class="chips">${recent.map(x => `<button class="chip" type="button" data-w="${esc(x.word)}" data-l="${x.lang}"${langAttr(x.lang)}>${esc(x.word)}</button>`).join('')}</div>
+      <button class="btn" type="button" id="histBtn" style="width:100%;margin-top:6px">All search history…</button>` : `<p class="empty">Type a word and press Enter to see its meaning, history and how it's said in the languages you compare.</p>`}
     <p class="credit">Definitions, word history &amp; translations from <a href="https://en.wiktionary.org/">Wiktionary</a> (CC BY-SA 4.0), with <a href="https://www.wikidata.org/">Wikidata</a> (CC0) and <a href="https://www.datamuse.com/api/">Datamuse</a> as second sources. v${APP_VERSION}</p>`;
   r.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { if (b.dataset.l !== settings.defaultLang){ settings.defaultLang = b.dataset.l; saveSettings(); } doSearch(b.dataset.w); });
+  const hb = $('#histBtn'); if (hb) hb.onclick = historySheet;
 }
 async function doSearch(word){
   const code = settings.defaultLang;
@@ -1131,7 +1257,11 @@ async function doSearch(word){
   try{
     const res = await lookup(word, code);
     current = res;
-    if (!res.notFound){ recent = [{word, lang:code}, ...recent.filter(x => !(x.word.toLowerCase()===word.toLowerCase() && x.lang===code))].slice(0,12); store.set('recent', recent); }
+    if (!res.notFound){
+      recent = [{word, lang:code}, ...recent.filter(x => !(x.word.toLowerCase()===word.toLowerCase() && x.lang===code))].slice(0,12); store.set('recent', recent);
+      addHistory(word, code, res);
+      if (!bookP.yonge) setTimeout(() => loadBook('yonge').catch(() => {}), 1500);
+    }
     searching = false;
     if (route().name === 'search') renderResults(res);
   }catch(err){
@@ -1198,7 +1328,7 @@ function renderResults(res){
     ${res.pivot ? `<div class="info">Translations are matched through the English word <b>${esc(res.pivot)}</b> (the first English gloss), so they may be approximate.</div>` : ''}
     ${!cmp.length ? '<p class="empty">Add compare languages above to see this word in other languages.</p>' : ''}
     <div class="cards">${cmp.map(c => langCard(res, c)).join('')}</div>
-    <p class="credit">Sources: ${res.url ? `<a href="${esc(res.url)}">Wiktionary “${esc(res.title)}”</a> (CC BY-SA 4.0)` : 'Wiktionary (no entry)'}${alt.length ? ' · <a href="https://www.datamuse.com/api/">Datamuse</a> (WordNet)' : ''}${res.wd ? ` · <a href="${esc(res.wd.url)}">Wikidata</a> (CC0)` : ''}${res.nameInfo && res.nameInfo.url ? ` · <a href="${esc(res.nameInfo.url)}">Wikipedia</a> (CC BY-SA 4.0)` : ''}${res.nameInfo && res.nameInfo.bible ? ` · Hitchcock’s Bible Names (public domain, via <a href="https://github.com/BradyStephenson/bible-data">BibleData</a>, CC BY 4.0)` : ''}. Respellings marked <span class="tag auto">auto</span> are machine-generated from the transliteration.</p>`;
+    <p class="credit">Sources: ${res.url ? `<a href="${esc(res.url)}">Wiktionary “${esc(res.title)}”</a> (CC BY-SA 4.0)` : 'Wiktionary (no entry)'}${alt.length ? ' · <a href="https://www.datamuse.com/api/">Datamuse</a> (WordNet)' : ''}${res.wd ? ` · <a href="${esc(res.wd.url)}">Wikidata</a> (CC0)` : ''}${res.nameInfo && res.nameInfo.url ? ` · <a href="${esc(res.nameInfo.url)}">Wikipedia</a> (CC BY-SA 4.0)` : ''}${res.nameInfo && (res.nameInfo.yonge || (res.nameInfo.rootInfo && res.nameInfo.rootInfo.yonge)) ? ` · ${esc(BOOKS.yonge.title)} (public domain, Internet Archive)` : ''}${res.nameInfo && res.nameInfo.bardsley ? ` · ${esc(BOOKS.bardsley.title)} (public domain, Internet Archive)` : ''}${res.nameInfo && res.nameInfo.bible ? ` · Hitchcock’s Bible Names (public domain, via <a href="https://github.com/BradyStephenson/bible-data">BibleData</a>, CC BY 4.0)` : ''}. Respellings marked <span class="tag auto">auto</span> are machine-generated from the transliteration.</p>`;
   r.querySelectorAll('[data-name-search]').forEach(b => b.onclick = () => { window.scrollTo(0,0); doSearch(b.dataset.nameSearch); });
   r.querySelectorAll('[data-popnames]').forEach(b => b.onclick = () => popularNamesSheet(res));
   r.querySelector('[data-save="meaning"]').onclick = () => saveSheet(meaningItem, () => renderResults(res));
@@ -1261,7 +1391,7 @@ function nameCardHTML(res){
   const n = res.name, ni = res.nameInfo;
   const title = (ni && ni.name) || (n && n.title) || res.title;
   const selfName = !n && res.meanings[0] && /Proper noun/i.test(res.meanings[0].pos);
-  const anyMeaning = ni && (ni.meaning.length || ni.rootInfo || ni.wiktEty || ni.bible);
+  const anyMeaning = ni && (ni.meaning.length || ni.rootInfo || ni.wiktEty || ni.bible || ni.yonge || ni.bardsley);
   const sm = nameSummary(ni);
   // root chain: Tania → Tatiana → Tatius
   const chain = []; let r = ni; while (r && r.root){ chain.push(r.root); r = r.rootInfo; }
@@ -1270,10 +1400,15 @@ function nameCardHTML(res){
   const relHTML = related.length ? `<div class="small muted" style="margin-top:6px">Related & derived names</div><div class="namechips">${related.map(x => `<button type="button" class="chip" data-name-search="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : '';
   // Bible-name meanings for this name and its root names
   const bibles = []; let bq = ni; while (bq){ if (bq.bible) bibles.push([bq.name, bq.bible]); bq = bq.rootInfo; }
+  const yonges = [], bards = []; let oq = ni; while (oq){ if (oq.yonge) yonges.push([oq.name, oq.yonge]); if (oq.bardsley) bards.push([oq.name, oq.bardsley]); oq = oq.rootInfo; }
+  const booksHTML = (yonges.length ? `<div class="biblebox"><div class="small muted">Old name book <span class="tag plain">${esc(BOOKS.yonge.short)}</span></div>${yonges.map(([nm, y]) => {
+      const o = yongeOrigin(y.e); return `<div><b>${esc(nm)}</b> — ${esc(y.e.m)}${o ? ` <span class="small muted">(${esc(o.lang)}${y.e.used ? ', used in ' + esc(y.e.used) : ''})</span>` : ''} <a class="srclink" href="${esc(archiveSearchUrl(y.id, nm))}">p. ${y.e.p} ↗</a></div>`; }).join('')}</div>` : '')
+    + (bards.length ? `<div class="biblebox"><div class="small muted">Surname dictionary <span class="tag plain">${esc(BOOKS.bardsley.short)}</span></div>${bards.map(([nm, b]) => `<div><b>${esc(nm)}</b> — ${esc(b.e)} <a class="srclink" href="${esc(archiveSearchUrl(b.id, nm))}">source ↗</a></div>`).join('')}</div>` : '');
   const bibleHTML = bibles.length ? `<div class="biblebox"><div class="small muted">Bible name meaning <span class="tag plain">Hitchcock, 1869</span></div>${bibles.map(([nm, mm]) => `<div><b>${esc(nm)}</b> — ${esc(mm)}</div>`).join('')}</div>` : '';
   return `<details class="pill"><summary><span class="sumwrap"><span>Name meaning — ${esc(title)}</span>${sm.text ? `<span class="sumline">${esc(sm.text)}${sm.code ? `<span class="ocode" title="${esc(ni.origin ? ni.origin.lang : '')}">${esc(sm.code)}</span>` : ''}</span>` : ''}</span><span class="meta">${ICON.chev}</span></summary><div class="body">
     ${chainHTML}
     ${ni ? nameBlockHTML(ni, 0) : ''}
+    ${booksHTML}
     ${bibleHTML}
     ${relHTML}
     <button type="button" class="btn" data-popnames style="width:100%;margin:6px 0 4px">Popular meanings on name websites…</button>
@@ -1319,7 +1454,7 @@ function langCard(res, c, open){
   const t0 = terms[0], t0tr = t0 ? (t0.tr || t0._tr || '') : '';
   const t0rs = t0 ? respell(t0tr, c) : '';
   const subParts = t0 ? [isNonLatin(t0.term) && t0tr ? `<span${langAttr(c)}>${esc(t0.term)}</span>` : '', t0rs ? `<b>${esc(t0rs)}</b>` : '', t0.gloss ? esc(t0.gloss) : ''].filter(Boolean) : [];
-  const head = t0 ? `<span class="sumwrap"><span class="sumtxt">${esc(name)} — ${t0tr && isNonLatin(t0.term) ? esc(t0tr) : `<span${langAttr(c)}>${esc(t0.term)}</span>`}</span>${subParts.length ? `<span class="sumline">${subParts.join(' · ')}</span>` : ''}</span>` : `<span class="sumtxt">${esc(name)}</span>`;
+  const head = t0 ? `<span class="sumwrap"><span class="sumtxt"><span class="lname">${esc(name)}</span> — ${t0tr && isNonLatin(t0.term) ? `<span class="tlbig">${esc(t0tr)}</span>` : `<span class="tlbig"${langAttr(c)}>${esc(t0.term)}</span>`}</span>${subParts.length ? `<span class="sumline">${subParts.join(' · ')}</span>` : ''}</span>` : `<span class="sumtxt">${esc(name)}</span>`;
   let body;
   if (!terms.length) body = `<p class="muted">Neither Wiktionary nor Wikidata lists a ${esc(name)} form of “${esc(res.title)}”. Nothing has been guessed.</p>`;
   else body = (c==='hbo' && terms[0].viaHe ? `<div class="info small">Wiktionary doesn’t list Biblical Hebrew separately. Showing the Hebrew word(s), with the Biblical Hebrew pronunciation where the word’s entry gives one.</div>` : '')
@@ -1641,7 +1776,7 @@ function renderSettings(){
       <div class="info small" id="storeStatus">Checking storage…</div>
       <p class="small muted">Lists are saved on this device every time you change them (two copies), and stay after closing the app or restarting the phone. They are not online: export now and then as a backup, or to move lists between phone and PC. On iPhone, Safari and the home-screen app keep separate lists — use one of them.</p>
       <h3>About the data</h3>
-      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. Transliterations come from Wiktionary’s translation tables or the word’s own entry; when neither has one, Wiktionary’s transliteration rules are used (marked <span class="tag xl">Wiktionary rules</span>). The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>); name meanings come from the name’s English <a href="https://en.wikipedia.org/">Wikipedia</a> article (CC BY-SA 4.0, marked <span class="tag wp">Wikipedia</span>) and Wiktionary, plus Hitchcock’s Bible Names Dictionary (1869, public domain; data from <a href="https://github.com/BradyStephenson/bible-data">BibleData</a>, CC BY 4.0) for Bible names. Origin codes: HEB Hebrew, GRK Greek, LAT Latin, RUS Russian, GER German, FRE French, ENG English, IRI Irish and so on.</p>
+      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. Transliterations come from Wiktionary’s translation tables or the word’s own entry; when neither has one, Wiktionary’s transliteration rules are used (marked <span class="tag xl">Wiktionary rules</span>). The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>); name meanings come from the name’s English <a href="https://en.wikipedia.org/">Wikipedia</a> article (CC BY-SA 4.0, marked <span class="tag wp">Wikipedia</span>) and Wiktionary, plus two out-of-copyright name books read from the Internet Archive and kept on your device after first use — Yonge’s <i>History of Christian Names</i> (1884) and Bardsley’s <i>Dictionary of English and Welsh Surnames</i> (1901; these are scanned, so the odd scanning error is possible) — and Hitchcock’s Bible Names Dictionary (1869, public domain; data from <a href="https://github.com/BradyStephenson/bible-data">BibleData</a>, CC BY 4.0) for Bible names. Origin codes: HEB Hebrew, GRK Greek, LAT Latin, RUS Russian, GER German, FRE French, ENG English, IRI Irish and so on.</p>
       <p class="small muted">Biblical Hebrew isn’t listed separately on Wiktionary, so that card shows the Hebrew word with its Biblical Hebrew (Tiberian) pronunciation when the entry has one. Koine Greek is listed under Ancient Greek.</p>
       <p class="credit">Bridging Terms v${APP_VERSION}</p>
     </div>`;
@@ -1660,12 +1795,13 @@ function renderSettings(){
   v.querySelectorAll('[data-style-set]').forEach(b => b.onclick = () => setStyle(b.dataset.styleSet));
   $('#sDef').onclick = pickDefaultLang; $('#sCmp').onclick = pickCompareLangs;
   $('#sEx').onclick = exportData; $('#sIm').onclick = () => $('#importFile').click();
-  $('#sClr').onclick = () => confirmSheet('Clear search history?', 'Recent searches and saved look-ups are removed from this device. Your lists are not affected.', 'Clear', () => { recent = []; store.set('recent', []); store.set(CACHE_KEY, {}); store.set(TERMS_KEY, {}); current = null; render(); toast('Search history cleared'); });
+  $('#sClr').onclick = () => confirmSheet('Clear search history?', 'Recent searches and saved look-ups are removed from this device. Your lists are not affected.', 'Clear', () => { recent = []; store.set('recent', []); store.set(CACHE_KEY, {}); store.set(TERMS_KEY, {}); backup.put('history', []); backup.clearPrefix && backup.clearPrefix('lk:'); current = null; render(); toast('Search history cleared'); });
 }
 
 /* ---------- Link previews: links open an in-app pop-up first; the pop-up offers "Open on site" ---------- */
 const lpCache = new Map();
 const LP_STATIC = {
+  'archive.org': {title:'Internet Archive', text:'A free online library of scanned books. Bridging Terms reads two out-of-copyright name books from it: Yonge’s History of Christian Names (1884) and Bardsley’s Dictionary of English and Welsh Surnames (1901). The link opens the scanned page.'},
   'www.datamuse.com': {title:'Datamuse API', text:'A free word-finding service. Bridging Terms uses it for extra English definitions (from WordNet).'},
   'creativecommons.org': {title:'Creative Commons licence', text:'The licence that lets apps reuse Wiktionary and Wikipedia text, as long as the source is credited and shared alike.'},
 };
@@ -1699,7 +1835,7 @@ function lpBody(d, short){
     <div style="white-space:pre-line;margin-top:6px">${esc(txt) || '<span class="muted">No summary available.</span>'}</div>`;
 }
 function openLinkSheet(url){
-  const SITE = {'en.wikipedia.org':'Wikipedia','en.wiktionary.org':'Wiktionary','wikidata.org':'Wikidata','datamuse.com':'Datamuse','creativecommons.org':'Creative Commons'};
+  const SITE = {'en.wikipedia.org':'Wikipedia','en.wiktionary.org':'Wiktionary','wikidata.org':'Wikidata','datamuse.com':'Datamuse','creativecommons.org':'Creative Commons','archive.org':'Internet Archive'};
   const host = (() => { try{ const h = new URL(url).hostname.replace(/^www\./,''); return SITE[h] || h; }catch(e){ return 'site'; } })();
   openSheet(`<div id="lpBody"><div class="loading"><span class="spin" aria-hidden="true"></span> Loading preview…</div></div>
     <div class="btns"><button class="btn" data-x>Close</button><a class="btn primary" data-external href="${esc(url)}" target="_blank" rel="noopener" style="text-decoration:none">Open on ${esc(host)} ↗</a></div>`, sh => {
