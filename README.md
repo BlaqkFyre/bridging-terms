@@ -10,10 +10,13 @@ Definitions, etymologies, translations, transliterations and IPA come from [Engl
 
 Second sources: [Wikidata](https://www.wikidata.org/) (CC0) for names and labels in other languages, and the [Datamuse API](https://www.datamuse.com/api/) for extra English definitions (WordNet).
 
+Bible-name meanings: Hitchcock's Bible Names Dictionary (1869, public domain), via [BibleData](https://github.com/BradyStephenson/bible-data) by Brady Stephenson (CC BY 4.0), stored in `data/bible-names.json`.
+
 Live app: https://blaqkfyre.github.io/bridging-terms/
 
 ## Files
 - `index.html` — the whole app (inline CSS + JS)
 - `manifest.webmanifest`, `icons/` — home-screen install
 - `sw.js` — service worker (online-only for now)
+- `data/bible-names.json` — Bible-name meanings (2,619 names)
 - `TODO.md` — progress and next steps

@@ -124,6 +124,14 @@ details.pill,.pill{border:1px solid var(--line);border-radius:var(--r-pill);back
 details.pill[open]{border:1.5px solid var(--teal)}
 .pill>summary{list-style:none;cursor:pointer;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:600}
 .pill>summary::-webkit-details-marker{display:none}
+.sumwrap{display:flex;flex-direction:column;min-width:0;gap:2px}
+.sumline{font-weight:400;font-size:.86rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sumline b{color:var(--ink);font-weight:600}
+.ocode{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.5px;border:1px solid var(--line);border-radius:6px;padding:0 5px;margin-left:4px;color:var(--teal);vertical-align:1px}
+.namechips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.chainline{font-size:.95rem;margin:6px 0}
+.chainline button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:3px 10px;cursor:pointer;color:var(--teal);font-weight:600}
+.biblebox{margin:8px 0;padding:8px 10px;border-radius:12px;border:1px dashed var(--line)}
 .pill>summary .meta{color:var(--muted);font-weight:400;font-size:.88rem;display:flex;align-items:center;gap:6px;flex:none}
 .pill>summary .chev{transition:transform .15s;display:inline-block}
 details.pill[open]>summary .chev{transform:rotate(180deg)}
@@ -278,7 +286,7 @@ h2.page{font-size:1.45rem;margin:12px 0 2px}
 
 <script>
 'use strict';
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 
 /* ---------- Languages ---------- */
 // code = Wiktionary language code used in translation tables; sec = section heading on Wiktionary entries
@@ -309,7 +317,7 @@ const LANGS_AZ = [...LANGS].sort((a, b) => a.name.localeCompare(b.name));
 
 /* ---------- Storage (guarded) ---------- */
 // Look-up caches can always be thrown away; lists and settings never are.
-const CACHE_KEYS = ['cache4','terms2','xlit'];
+const CACHE_KEYS = ['cache5','terms2','xlit'];
 const store = {
   get(k, def){ try{ const v = localStorage.getItem('bt.'+k); return v ? JSON.parse(v) : def; }catch(e){ return def; } },
   set(k, v){
@@ -327,7 +335,7 @@ const store = {
   }
 };
 // Remove caches from older versions (they could fill the browser's storage and block list saving)
-['cache','terms','cache2','cache3'].forEach(k => { try{ localStorage.removeItem('bt.'+k); }catch(e){} });
+['cache','terms','cache2','cache3','cache4'].forEach(k => { try{ localStorage.removeItem('bt.'+k); }catch(e){} });
 
 // Second copy of the lists in IndexedDB (more durable than localStorage, survives a full localStorage)
 const backup = {
@@ -577,7 +585,7 @@ function titleForm(word, code){
   return w;
 }
 
-const CACHE_KEY = 'cache4', TERMS_KEY = 'terms2';   // v1.7: cache3 adds name meanings   // v1.2: old caches dropped (they held broken phone results)
+const CACHE_KEY = 'cache5', TERMS_KEY = 'terms2';   // v1.7: cache3 adds name meanings   // v1.2: old caches dropped (they held broken phone results)
 const withTimeout = (p, ms=9000) => Promise.race([p, new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 const WD_LANG = {cmn:'zh', hbo:'he'};
 
@@ -617,30 +625,66 @@ async function wikidataLookup(word, code){
 //  3) Wikipedia sentences that explain the meaning / origin
 // If the name comes from another name, the root name's meaning is looked up too (up to 2 steps: Tania → Tatiana → Tatius).
 const DERIV = /\b(diminutive|short(?:ened)? form|short|pet form|hypocoristic|nickname|variant(?: spelling)?|alternative (?:form|spelling)|feminine form|masculine form|form|anglicized form|anglicised form|transliteration|cognate|derivative)\b[^.;]*?\b(of|for|from)\b/i;
+// Language codes for the summary line (e.g. "man from Lucania · GRK")
+const ORIGIN_CODES = {Hebrew:'HEB','Biblical Hebrew':'HEB',Aramaic:'ARC',Greek:'GRK','Ancient Greek':'GRK','Koine Greek':'GRK',Latin:'LAT','Late Latin':'LAT',Russian:'RUS',Ukrainian:'UKR',Polish:'POL',Czech:'CZE',
+  German:'GER','Old High German':'GER','Middle High German':'GER',French:'FRE','Old French':'FRE','Anglo-Norman':'FRE',Italian:'ITA',Spanish:'SPA',Portuguese:'POR',Dutch:'DUT',
+  English:'ENG','Old English':'ENG','Middle English':'ENG',Irish:'IRI','Old Irish':'IRI','Scottish Gaelic':'SCO',Welsh:'WEL',Celtic:'CEL',Norse:'NOR','Old Norse':'NOR',Swedish:'SWE',Danish:'DAN',Norwegian:'NOR',Finnish:'FIN',Hungarian:'HUN',
+  Arabic:'ARA',Persian:'PER',Turkish:'TUR',Sanskrit:'SAN',Hindi:'HIN',Japanese:'JPN',Chinese:'CHI',Korean:'KOR',Germanic:'GER','Proto-Germanic':'GER',Sabine:'LAT',Etruscan:'ETR',Egyptian:'EGY',Akkadian:'AKK',Phoenician:'PHO'};
+const ORIGIN_RE = new RegExp('\\b(' + Object.keys(ORIGIN_CODES).sort((a,b) => b.length - a.length).join('|') + ')\\b');
+const originOf = text => { const m = (text || '').match(ORIGIN_RE); return m ? {lang: m[1], code: ORIGIN_CODES[m[1]]} : null; };
+// A short gloss in quotes, e.g. … means "man from Lucania" / Hebrew … (…, “who is like God?”)
+function glossFrom(text, name){
+  if (!text) return '';
+  const pats = [/\bmean(?:s|ing|t)?\b[^"“.]{0,40}["“]([^"”]{2,70})["”]/i, /“([^”]{2,60})”/, /"([^"]{2,60})"/];
+  for (const re of pats){
+    const m = text.match(re);
+    if (m){ const g = m[1].trim().replace(/[.,;:]+$/, ''); if (g && g.toLowerCase() !== (name || '').toLowerCase() && !/^[A-Z][a-z]+$/.test(g)) return g; }
+  }
+  return '';
+}
+const NAME_LINK = /^[A-Z][a-zà-ÿ'’-]+$/;
 async function wiktNameSense(name){
   const pg = await fetchPage(name);
   const sec = pg && langSection(pg.doc, 'English');
   if (!sec) return null;
-  let inPN = false;
+  const out = {text:'', root:'', relation:'', url: WIKT(pg.title) + '#English', etymology: extractEtymology(sec), related: []};
+  let inPN = false, relHead = '';
+  const related = new Set();
   for (const el of sec){
     const h = headingInfo(el);
-    if (h){ inPN = /^Proper noun/i.test(h.text); continue; }
-    if (inPN && el.tagName === 'OL'){
+    if (h){ inPN = /^Proper noun/i.test(h.text); relHead = /^(Alternative forms|Derived terms|Related terms|Coordinate terms)$/i.test(h.text) ? h.text : ''; continue; }
+    if (relHead && el.querySelectorAll){
+      const derived = /^Derived/i.test(relHead);
+      el.querySelectorAll('a').forEach(a => {
+        const t = (a.title || '').replace(/#.*/,'');
+        if (!NAME_LINK.test(t) || t.toLowerCase() === name.toLowerCase()) return;
+        // "Derived terms" also lists things like Michaelmas or Kirkmichael: keep only short pet forms (Bobby, Ruthie)
+        if (derived && (t.length > name.length + 3 || !t.toLowerCase().startsWith(name.slice(0,3).toLowerCase()) || /(s|ite|mas|ism|ian)$/.test(t.slice(name.length)))) return;
+        related.add(t);
+      });
+    }
+    if (inPN && el.tagName === 'OL' && !out.text){
       for (const li of el.children){
         const c = li.cloneNode(true); c.querySelectorAll('ul,dl,ol,.HQToggle,style').forEach(n => n.remove());
         const text = c.textContent.replace(/\s+/g,' ').trim();
         if (!/name/i.test(text)) continue;
+        out.text = text;
         const m = text.match(DERIV);
-        let root = '';
         if (m){
           const after = text.slice(m.index);
-          root = [...c.querySelectorAll('a')].map(a => (a.title || '').replace(/#.*/,'')).find(t => /^[A-Z][a-zà-ÿ'’-]+$/.test(t) && t.toLowerCase() !== name.toLowerCase() && after.includes(t)) || '';
+          out.root = [...c.querySelectorAll('a')].map(a => (a.title || '').replace(/#.*/,'')).find(t => NAME_LINK.test(t) && t.toLowerCase() !== name.toLowerCase() && after.includes(t)) || '';
+          out.relation = m[1].toLowerCase();
         }
-        return {text, root, relation: m ? m[1].toLowerCase() : '', url: WIKT(pg.title) + '#English', etymology: extractEtymology(sec)};
+        break;
       }
     }
   }
-  return {text:'', root:'', relation:'', url: WIKT(pg.title) + '#English', etymology: extractEtymology(sec)};
+  out.related = [...related].filter(r => r !== out.root).slice(0, 14);
+  const ety = out.etymology.join(' ');
+  out.gloss = glossFrom(ety, name);
+  // where the name is used/borrowed from ("A female given name from Russian"), else the first language in the etymology
+  out.origin = originOf((out.text.match(/\bfrom ([A-Z][\w -]+)/) || [])[1] || '') || originOf(ety);
+  return out;
 }
 async function wikipediaName(word){
   const s = await (await withTimeout(fetch(`https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&origin=*&type=item&limit=12&language=en&uselang=en&search=${encodeURIComponent(word)}`), 8000)).json();
@@ -660,6 +704,7 @@ async function wikipediaName(word){
   const strong = sents.filter(x => /\bmean(s|ing|t)?\b/i.test(x));
   const weaker = sents.filter(x => !strong.includes(x) && /derived from|derives from|derivative of|comes from|form of|named after|origin(ally)?\b|diminutive|short for|translat/i.test(x));
   info.meaning = strong.concat(weaker).slice(0, 3);
+  info.gloss = glossFrom(strong.join(' '), word);
   const joined = info.meaning.concat([info.intro]).join(' ');
   const rm = joined.match(/\b(?:diminutive|short form|pet form|variant|form|derivative)\s+of\s+(?:the\s+(?:[a-z]+\s+)*?name\s+)?([A-Z][a-zà-ÿ'’-]+)/)
           || joined.match(/\b(?:diminutive|short form|pet form|variant|form|derivative)\s+of\s+[^.]{0,60}?\bname\s+([A-Z][a-zà-ÿ'’-]+)/);
@@ -671,10 +716,12 @@ async function nameMeaning(word, depth = 0, seen = new Set()){
   const name = word[0].toUpperCase() + word.slice(1);
   seen.add(name.toLowerCase());
   const [wk, wp] = await Promise.all([wiktNameSense(name).catch(() => null), wikipediaName(name).catch(() => null)]);
-  if (!wp && !(wk && wk.text)) return null;
+  if (!wp && !(wk && wk.text)){ const bm = await bibleMeaning(name); return bm ? {name, kind:'Bible name', meaning:[], intro:'', title:'', url:'', bible: bm, related: []} : null; }
   const info = Object.assign({name, kind: '', wdUrl: '', title: '', url: '', meaning: [], intro: ''}, wp || {});
   info.name = name;
   if (wk && wk.text){ info.wikt = wk.text; info.wiktUrl = wk.url; info.wiktEty = (wk.etymology || [])[0] || ''; if (!info.kind) info.kind = /female/i.test(wk.text) ? 'female given name' : /male/i.test(wk.text) ? 'male given name' : 'name'; }
+  if (wk){ info.related = wk.related || []; info.wiktGloss = wk.gloss || ''; info.origin = wk.origin || null; }
+  info.bible = await bibleMeaning(name);
   const root = (wk && wk.root) || (wp && wp.root) || '';
   if (root && depth < 2 && !seen.has(root.toLowerCase())){
     info.root = root; info.relation = (wk && wk.root === root && wk.relation) || 'form';
@@ -682,9 +729,40 @@ async function nameMeaning(word, depth = 0, seen = new Set()){
   }
   return info;
 }
+// Hitchcock's Bible Names Dictionary, stored in this repo (data/bible-names.json), loaded once when needed
+let bibleNamesP = null;
+function bibleMeaning(name){
+  if (!bibleNamesP) bibleNamesP = fetch('data/bible-names.json').then(r => r.ok ? r.json() : {names:{}}).then(j => j.names || {}).catch(() => { bibleNamesP = null; return {}; });
+  return bibleNamesP.then(map => {
+    let m = map[(name || '').toLowerCase()];
+    const same = m && m.match(/^same as ([A-Z][a-z]+)/i);
+    if (same && map[same[1].toLowerCase()]) m = `${map[same[1].toLowerCase()]} (same as ${same[1]})`;
+    return m || '';
+  });
+}
+// The short, easy summary for the name card, e.g. "man from Lucania · GRK" or "diminutive of Tatiana (from Tatius) · RUS"
+function nameSummary(ni){
+  if (!ni) return {text:'', code:''};
+  const code = ni.origin ? ni.origin.code : '';
+  const gloss = ni.wiktGloss || ni.gloss || '';
+  if (gloss) return {text: gloss, code};
+  if (ni.root){
+    const chain = []; let r = ni.rootInfo, rootGloss = '';
+    while (r){ if (!rootGloss) rootGloss = r.wiktGloss || r.gloss || ''; if (r.root) chain.push(r.root); r = r.rootInfo; }
+    if (!ni.rootInfo || !ni.rootInfo.root) { /* nothing deeper */ }
+    const deeper = chain.length ? ` (from ${chain[chain.length - 1]})` : '';
+    const rel = {short:'short for', 'shortened form':'short form', nickname:'nickname for'}[ni.relation] || ((ni.relation || 'form') + ' of');
+    return {text: `${rel} ${ni.root}${rootGloss ? ` — “${rootGloss}”` : deeper}`, code: code || (ni.rootInfo && ni.rootInfo.origin ? ni.rootInfo.origin.code : '')};
+  }
+  if (ni.bible) return {text: ni.bible.split(';').slice(0, 2).join(';').trim(), code: code || 'HEB'};
+  if (ni.origin) return {text: `from ${ni.origin.lang}`, code};
+  return {text: ni.kind || '', code};
+}
 // Best one-line meaning for a name, following the root name if needed
 function nameMeaningLine(ni){
   if (!ni) return '';
+  const sm = nameSummary(ni);
+  if (sm.text && (ni.gloss || ni.wiktGloss || ni.root || ni.bible)) return sm.text + (sm.code ? ` (${sm.code})` : '');
   if (ni.meaning && ni.meaning.length) return ni.meaning[0];
   if (ni.root && ni.rootInfo){ const r = nameMeaningLine(ni.rootInfo); return `${cap(ni.relation || 'form')} of ${ni.root}${r ? ': ' + r : ''}`; }
   return ni.wiktEty || '';
@@ -752,7 +830,7 @@ async function lookup(word, code){
   res.wd = await wdP;
   // Show a name meaning when the word is (also) a name
   const nm = await nmP;
-  const looksLikeName = /^\p{Lu}/u.test(base) || res.name || res.meanings.some(m => /Proper noun/i.test(m.pos)) || (res.wd && /given name|family name|surname/i.test(res.wd.description || ''));
+  const looksLikeName = /^\p{Lu}/u.test(base) || res.name || res.meanings.some(m => /Proper noun/i.test(m.pos)) || (res.wd && /given name|family name|surname/i.test(res.wd.description || '')) || (nm && nm.bible && /^\p{Lu}/u.test(word));
   if (nm && looksLikeName) res.nameInfo = nm;
   // Wikidata fills languages Wiktionary has no translation for
   if (res.wd){
@@ -1105,7 +1183,7 @@ function renderResults(res){
   r.innerHTML = `
     <h2 class="word-h"${langAttr(code)}>${esc(res.title)} <small>${esc(posList)}</small></h2>
     ${res.cached ? '<p class="small muted" style="margin:2px 0 0">Saved on this device</p>' : ''}
-    <details class="pill" open><summary><span>Meaning</span><span class="meta">${ICON.chev}</span></summary><div class="body">
+    <details class="pill"><summary><span class="sumwrap"><span>Meaning</span>${meaningSummary(res) ? `<span class="sumline">${meaningSummary(res)}</span>` : ''}</span><span class="meta">${ICON.chev}</span></summary><div class="body">
       <div style="display:flex;justify-content:flex-end"><button class="savebtn" data-save="meaning">☆ Save</button></div>
       ${res.meanings.length ? res.meanings.map(m => `<div class="pos">${esc(m.pos)}</div><ol class="defs">${m.defs.map(d=>`<li>${esc(d)}</li>`).join('')}</ol>`).join('')
         + `<p class="small muted" style="margin:4px 0 0"><span class="tag">Wiktionary</span> <a href="${esc(res.url)}">Full entry ↗</a></p>`
@@ -1120,7 +1198,8 @@ function renderResults(res){
     ${res.pivot ? `<div class="info">Translations are matched through the English word <b>${esc(res.pivot)}</b> (the first English gloss), so they may be approximate.</div>` : ''}
     ${!cmp.length ? '<p class="empty">Add compare languages above to see this word in other languages.</p>' : ''}
     <div class="cards">${cmp.map(c => langCard(res, c)).join('')}</div>
-    <p class="credit">Sources: ${res.url ? `<a href="${esc(res.url)}">Wiktionary “${esc(res.title)}”</a> (CC BY-SA 4.0)` : 'Wiktionary (no entry)'}${alt.length ? ' · <a href="https://www.datamuse.com/api/">Datamuse</a> (WordNet)' : ''}${res.wd ? ` · <a href="${esc(res.wd.url)}">Wikidata</a> (CC0)` : ''}${res.nameInfo && res.nameInfo.url ? ` · <a href="${esc(res.nameInfo.url)}">Wikipedia</a> (CC BY-SA 4.0)` : ''}. Respellings marked <span class="tag auto">auto</span> are machine-generated from the transliteration.</p>`;
+    <p class="credit">Sources: ${res.url ? `<a href="${esc(res.url)}">Wiktionary “${esc(res.title)}”</a> (CC BY-SA 4.0)` : 'Wiktionary (no entry)'}${alt.length ? ' · <a href="https://www.datamuse.com/api/">Datamuse</a> (WordNet)' : ''}${res.wd ? ` · <a href="${esc(res.wd.url)}">Wikidata</a> (CC0)` : ''}${res.nameInfo && res.nameInfo.url ? ` · <a href="${esc(res.nameInfo.url)}">Wikipedia</a> (CC BY-SA 4.0)` : ''}${res.nameInfo && res.nameInfo.bible ? ` · Hitchcock’s Bible Names (public domain, via <a href="https://github.com/BradyStephenson/bible-data">BibleData</a>, CC BY 4.0)` : ''}. Respellings marked <span class="tag auto">auto</span> are machine-generated from the transliteration.</p>`;
+  r.querySelectorAll('[data-name-search]').forEach(b => b.onclick = () => { window.scrollTo(0,0); doSearch(b.dataset.nameSearch); });
   r.querySelector('[data-save="meaning"]').onclick = () => saveSheet(meaningItem, () => renderResults(res));
   r.querySelectorAll('[data-save-c]').forEach(b => b.onclick = () => {
     const t = cardTerms(res, b.dataset.saveC)[+b.dataset.i];
@@ -1132,6 +1211,13 @@ function renderResults(res){
   });
   // Fill in missing transliteration / IPA from each language's own entry
   cmp.forEach(c => enrichCard(res, c));
+}
+function meaningSummary(res){
+  const m = res.meanings[0];
+  if (m) return `<b>${esc(m.pos.toLowerCase())}</b> — ${esc(m.defs[0])}`;
+  const a = (res.alt || [])[0]; if (a) return `${a.pos ? `<b>${esc(a.pos)}</b> — ` : ''}${esc(a.def)}`;
+  if (res.wd && res.wd.description) return esc(res.wd.description);
+  return '';
 }
 function nameBlockHTML(ni, level){
   // level 0 = the searched name, 1+ = the name it comes from
@@ -1153,16 +1239,27 @@ function nameBlockHTML(ni, level){
 function nameCardHTML(res){
   const n = res.name, ni = res.nameInfo;
   const title = (ni && ni.name) || (n && n.title) || res.title;
-  const open = /^\p{Lu}/u.test(res.word) || (!res.meanings.length);
   const selfName = !n && res.meanings[0] && /Proper noun/i.test(res.meanings[0].pos);
-  const anyMeaning = ni && (ni.meaning.length || ni.rootInfo || ni.wiktEty);
-  return `<details class="pill"${open ? ' open' : ''}><summary><span>Name meaning — ${esc(title)}</span><span class="meta">${ICON.chev}</span></summary><div class="body">
+  const anyMeaning = ni && (ni.meaning.length || ni.rootInfo || ni.wiktEty || ni.bible);
+  const sm = nameSummary(ni);
+  // root chain: Tania → Tatiana → Tatius
+  const chain = []; let r = ni; while (r && r.root){ chain.push(r.root); r = r.rootInfo; }
+  const chainHTML = chain.length ? `<div class="chainline"><span class="small muted">Root:</span> <b>${esc(title)}</b> ${chain.map(x => `→ <button type="button" data-name-search="${esc(x)}">${esc(x)}</button>`).join(' ')}</div>` : '';
+  const related = ni && ni.related && ni.related.length ? ni.related : [];
+  const relHTML = related.length ? `<div class="small muted" style="margin-top:6px">Related & derived names</div><div class="namechips">${related.map(x => `<button type="button" class="chip" data-name-search="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : '';
+  // Bible-name meanings for this name and its root names
+  const bibles = []; let bq = ni; while (bq){ if (bq.bible) bibles.push([bq.name, bq.bible]); bq = bq.rootInfo; }
+  const bibleHTML = bibles.length ? `<div class="biblebox"><div class="small muted">Bible name meaning <span class="tag plain">Hitchcock, 1869</span></div>${bibles.map(([nm, mm]) => `<div><b>${esc(nm)}</b> — ${esc(mm)}</div>`).join('')}</div>` : '';
+  return `<details class="pill"><summary><span class="sumwrap"><span>Name meaning — ${esc(title)}</span>${sm.text ? `<span class="sumline">${esc(sm.text)}${sm.code ? `<span class="ocode" title="${esc(ni.origin ? ni.origin.lang : '')}">${esc(sm.code)}</span>` : ''}</span>` : ''}</span><span class="meta">${ICON.chev}</span></summary><div class="body">
+    ${chainHTML}
     ${ni ? nameBlockHTML(ni, 0) : ''}
+    ${bibleHTML}
+    ${relHTML}
     ${n ? `${n.meanings.map(m => `<ol class="defs">${m.defs.map(d=>`<li>${esc(d)}</li>`).join('')}</ol>`).join('')}
       ${n.etymology.length && !(ni && ni.wiktEty) ? `<div class="pos small">Name origin</div>${n.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('')}` : ''}
       ${ni && ni.wiktUrl ? '' : `<p class="small muted" style="margin:0"><a href="${esc(n.url)}" class="srclink"><span class="tag">Wiktionary</span> Name entry</a></p>`}` : ''}
     ${selfName && res.etymology.length && !(ni && ni.wiktEty) ? `<div class="pos small">Name origin</div>${res.etymology.map(e=>`<p style="margin:0 0 8px">${esc(e)}</p>`).join('')}` : ''}
-    ${!anyMeaning && !(n && n.etymology.length) && !res.etymology.length ? '<p class="small muted" style="margin:0">No meaning recorded for this name in Wikipedia or Wiktionary.</p>' : ''}
+    ${!anyMeaning && !(n && n.etymology.length) && !res.etymology.length ? '<p class="small muted" style="margin:0">No meaning recorded for this name in Wikipedia, Wiktionary or the Bible-names dictionary.</p>' : ''}
   </div></details>`;
 }
 function cardTerms(res, c){
@@ -1198,14 +1295,16 @@ function langCard(res, c, open){
   const terms = cardTerms(res, c);
   const name = langName(c);
   const t0 = terms[0], t0tr = t0 ? (t0.tr || t0._tr || '') : '';
-  const head = t0 ? `<span class="sumtxt">${esc(name)} — ${t0tr && isNonLatin(t0.term) ? esc(t0tr) : `<span${langAttr(c)}>${esc(t0.term)}</span>`}</span>` : `<span class="sumtxt">${esc(name)}</span>`;
+  const t0rs = t0 ? respell(t0tr, c) : '';
+  const subParts = t0 ? [isNonLatin(t0.term) && t0tr ? `<span${langAttr(c)}>${esc(t0.term)}</span>` : '', t0rs ? `<b>${esc(t0rs)}</b>` : '', t0.gloss ? esc(t0.gloss) : ''].filter(Boolean) : [];
+  const head = t0 ? `<span class="sumwrap"><span class="sumtxt">${esc(name)} — ${t0tr && isNonLatin(t0.term) ? esc(t0tr) : `<span${langAttr(c)}>${esc(t0.term)}</span>`}</span>${subParts.length ? `<span class="sumline">${subParts.join(' · ')}</span>` : ''}</span>` : `<span class="sumtxt">${esc(name)}</span>`;
   let body;
   if (!terms.length) body = `<p class="muted">Neither Wiktionary nor Wikidata lists a ${esc(name)} form of “${esc(res.title)}”. Nothing has been guessed.</p>`;
   else body = (c==='hbo' && terms[0].viaHe ? `<div class="info small">Wiktionary doesn’t list Biblical Hebrew separately. Showing the Hebrew word(s), with the Biblical Hebrew pronunciation where the word’s entry gives one.</div>` : '')
     + terms.map((t,i) => termHTML(res, c, t, i)).join('')
     + (terms[0].src === 'wikidata' ? `<p class="small muted" style="margin:6px 0 0"><span class="tag wd">Wikidata</span> label — Wiktionary has no translation for this</p>`
        : `<p class="small muted" style="margin:6px 0 0"><span class="tag">Wiktionary</span> translation table</p>`);
-  if (open === undefined){ const cmp = settings.compare.filter(x => x !== res.lang && L[x]); open = cmp.indexOf(c) < 4; }
+  if (open === undefined) open = false;   // all cards start collapsed; the heading shows the word and pronunciation
   return `<details class="pill"${open ? ' open' : ''} data-card="${c}"><summary>${head}<span class="meta">${terms.length>1?terms.length:''} ${ICON.chev}</span></summary><div class="body">${body}</div></details>`;
 }
 async function enrichCard(res, c){
@@ -1520,7 +1619,7 @@ function renderSettings(){
       <div class="info small" id="storeStatus">Checking storage…</div>
       <p class="small muted">Lists are saved on this device every time you change them (two copies), and stay after closing the app or restarting the phone. They are not online: export now and then as a backup, or to move lists between phone and PC. On iPhone, Safari and the home-screen app keep separate lists — use one of them.</p>
       <h3>About the data</h3>
-      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. Transliterations come from Wiktionary’s translation tables or the word’s own entry; when neither has one, Wiktionary’s transliteration rules are used (marked <span class="tag xl">Wiktionary rules</span>). The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>); name meanings come from the name’s English <a href="https://en.wikipedia.org/">Wikipedia</a> article (CC BY-SA 4.0, marked <span class="tag wp">Wikipedia</span>).</p>
+      <p class="small">Meanings, word history and translations come from <a href="https://en.wiktionary.org/">English Wiktionary</a>, licensed <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. Transliterations come from Wiktionary’s translation tables or the word’s own entry; when neither has one, Wiktionary’s transliteration rules are used (marked <span class="tag xl">Wiktionary rules</span>). The bold easy-read respelling (e.g. <b>sha-LOHM</b>) is machine-generated from that transliteration and marked <span class="tag auto">auto</span>. Where the source has no transliteration or pronunciation, the app says so instead of guessing. Second sources: <a href="https://www.wikidata.org/">Wikidata</a> (CC0) gives names, people, places and concepts in many languages and fills in when Wiktionary has no translation (marked <span class="tag wd">Wikidata</span>); <a href="https://www.datamuse.com/api/">Datamuse</a> adds extra English definitions from WordNet (marked <span class="tag dm">Datamuse</span>); name meanings come from the name’s English <a href="https://en.wikipedia.org/">Wikipedia</a> article (CC BY-SA 4.0, marked <span class="tag wp">Wikipedia</span>) and Wiktionary, plus Hitchcock’s Bible Names Dictionary (1869, public domain; data from <a href="https://github.com/BradyStephenson/bible-data">BibleData</a>, CC BY 4.0) for Bible names. Origin codes: HEB Hebrew, GRK Greek, LAT Latin, RUS Russian, GER German, FRE French, ENG English, IRI Irish and so on.</p>
       <p class="small muted">Biblical Hebrew isn’t listed separately on Wiktionary, so that card shows the Hebrew word with its Biblical Hebrew (Tiberian) pronunciation when the entry has one. Koine Greek is listed under Ancient Greek.</p>
       <p class="credit">Bridging Terms v${APP_VERSION}</p>
     </div>`;

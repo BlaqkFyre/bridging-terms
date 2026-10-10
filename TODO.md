@@ -57,9 +57,15 @@
 - [x] Two new custom styles: Periscope (navy, light blue, dark blue-grey) and ArcticSpring (icy blue & spring green)
 - [x] Theme split into two header buttons: Mode (Auto / Light / Dark) and Custom styles (Bubblegum / Periscope / ArcticSpring / Off); Settings has both groups
 
+## Done (v1.10.0, 10 Oct 2026)
+- [x] After a search every card starts collapsed with a one-line summary: Meaning (part of speech + first definition), Name meaning (easy meaning + origin code, e.g. "man from Lucania · LAT", "lady, princess · HEB", "diminutive of Tatiana (from Tatius) · RUS") and each language (word · script · pronunciation)
+- [x] Name meaning card shows the root chain (Tania → Tatiana → Tatius, tap to search), related & derived names (tap to search), and Bible-name meanings from Hitchcock's Bible Names Dictionary (2,619 names, data/bible-names.json, stored in the repo)
+- [x] Easy meanings pulled from the quoted glosses in Wiktionary / Wikipedia; Wiktionary preferred
+
 ## Next
 - [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
-- [ ] Later: biblical name meanings (e.g. Hitchcock's Bible Names / BDB via Bolls.life) for names Wikipedia doesn't explain
+- [ ] Later (optional): Behind the Name name-synonym file (CC BY-SA, needs a free account to download) for more variant ↔ root links
+- [ ] Later (optional): serverless helper (Netlify/Cloudflare) for an AI one-line name summary + shared name library saved to Git
 - [ ] Later: Wikipedia cross-language links for names of people/places (e.g. Luke → Λουκάς, لوقا)
 - [ ] Later (optional): Sefaria Hebrew/Aramaic dictionary panel; Tatoeba example sentences; MyMemory machine translation (marked "machine")
 - [ ] Typed words with no transliteration found (e.g. unpointed Hebrew not on Wiktionary): let me add one by hand
