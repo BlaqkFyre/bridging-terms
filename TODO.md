@@ -70,6 +70,17 @@
 - [x] Every word/name looked up is saved on the device (no 120-word limit) and reopens instantly; new "All search history…" list with filter
 - [x] Collapsed language cards show the transliteration in bold (smaller version of the expanded style)
 
+## Name & term meaning sources — reference (from Decision Wheel chat, Oct 2026)
+Status checked against what's already built and tested in this app.
+- [x] Quick view: one-line card summary (name → meaning · origin code), "more" when expanded — done in v1.10 (collapsed pills with summary line)
+- [x] Bundle locally, live APIs only for gaps — partly done: Bible names bundled in `data/bible-names.json`; Yonge/Bardsley books cached on the device after first use; every look-up saved for instant reuse
+- [ ] Behind the Name — ⚠️ checked Oct 2026: the free API returns only gender, usage and related names, **not meanings** (meaning text isn't licensed for other apps). Limit confirmed: 4,000 requests/day, needs a key (would be visible on GitHub Pages without a small server). Useful later only for: related-name links (API or their CC BY-SA name-synonym download)
+- [ ] Wiktionary via Kaikki.org (wiktextract) — tested: blocks direct browser requests (no CORS), so it would need pre-extracting into files in the repo (large; e.g. only names + Bible terms). Note: the app already reads etymology live through Wiktionary's parse API (the REST endpoint alone gives definitions only)
+- [ ] Bible terms in depth (public domain / open licence, bundle as JSON): Easton's Bible Dictionary (1897) or Smith's (1863) for depth; Strong's Hebrew/Greek lexicon; STEPBible lexicons (Tyndale House, CC BY). Hitchcock's one-line meanings — done
+- [ ] Etymonline — no public API, don't scrape: add a link-out (in-app pop-up "Open on Etymonline") for English words and names
+- [ ] Wikidata IDs to tell apart terms/names with the same spelling (e.g. Luke the given name vs Luke the Evangelist) — partly used (picks the given-name item); could show a "Did you mean…" choice when several match
+- [x] Skip US SSA baby-name data (popularity only, no meanings) — agreed, not planned
+
 ## Next
 - [ ] Later: Biblical Hebrew & Koine Greek from Bolls.life (BDB/Thayer, Strong's, phonetic) and STEPBible lexicons (CC BY) — real biblical words + dictionary pronunciation
 - [ ] Later (optional): Behind the Name name-synonym file (CC BY-SA, needs a free account to download) for more variant ↔ root links
